@@ -14,7 +14,7 @@ export async function serveHttp(opts: { port?: number } = {}): Promise<HttpServe
   const port = opts.port ?? 7777;
 
   const server = createServer(async (req, res) => {
-    if (!req.url || !req.url.startsWith("/mcp")) {
+    if (!req.url?.startsWith("/mcp")) {
       res
         .writeHead(404, { "Content-Type": "application/json" })
         .end(JSON.stringify({ error: "not found" }));
