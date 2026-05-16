@@ -15,6 +15,7 @@ Thumbs.db
 
 # local data (cache / sqlite)
 .docs-mcp/
+.tmp-test-*/
 bench-result.json
 bench-baseline.json
 

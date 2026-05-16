@@ -1,9 +1,15 @@
 import { describe, expect, it } from "bun:test";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { serveHttp } from "../../src/cli/serve-http.ts";
 
 describe("integration/http-transport", () => {
   it("listens on a random port and rejects GET /mcp with 405", async () => {
-    const tmpDir = `${process.cwd()}/.tmp-test-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tmpDir = join(
+      tmpdir(),
+      `docs-mcp-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     process.env.DOCS_MCP_DATA_DIR = tmpDir;
     process.env.LOG_LEVEL = "silent";
     const handle = await serveHttp({ port: 0 });
@@ -15,6 +21,7 @@ describe("integration/http-transport", () => {
       await handle.stop();
       delete process.env.DOCS_MCP_DATA_DIR;
       delete process.env.LOG_LEVEL;
+      rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 });
