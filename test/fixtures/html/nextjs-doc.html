@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Routing | Next.js Docs</title>
+</head>
+<body>
+  <header><nav><a href="/">Home</a> <a href="/docs">Docs</a></nav></header>
+  <main>
+    <article>
+      <h1>App Router Routing</h1>
+      <p>Next.js uses a file-system based router where folders are used to define routes. Each folder represents a route segment that maps to a URL segment.</p>
+      <h2>Dynamic Routes</h2>
+      <p>You can create <a href="../dynamic-routes">dynamic routes</a> by wrapping a folder name in brackets. The convention follows the rules described in the official documentation. This paragraph adds enough content for Readability to classify the section as readable content with a high score.</p>
+      <p>The convention is documented in the <a href="https://nextjs.org/docs/conventions">conventions guide</a>. We provide sample code below that demonstrates a minimal dynamic route handler implementation with TypeScript types and explicit return statements.</p>
+      <pre><code class="language-ts">export default function Page({ params }: { params: { slug: string } }) {
+  return &lt;div&gt;Slug: {params.slug}&lt;/div&gt;;
+}</code></pre>
+      <h2>Status Codes</h2>
+      <p>The following table summarizes the common HTTP status codes returned by Next.js routes. Each row explains the meaning and a typical usage scenario across different runtimes.</p>
+      <table>
+        <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>200</td><td>OK</td></tr>
+          <tr><td>404</td><td>Not Found</td></tr>
+        </tbody>
+      </table>
+      <p>An illustration of the routing tree:</p>
+      <img src="../img/routing.png" srcset="../img/routing@2x.png 2x" alt="routing">
+      <p><del>Old behavior</del> has been replaced. We also document the rationale for the new approach in the migration guide so that readers understand the trade-offs and the runtime cost of each rendering mode.</p>
+    </article>
+  </main>
+  <aside>Related</aside>
+  <footer>Copyright</footer>
+</body>
+</html>
