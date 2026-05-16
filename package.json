@@ -1,0 +1,54 @@
+{
+  "name": "docs-mcp",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Fast local MCP server that indexes documentation sites by base URL and serves Markdown / search / semantic search",
+  "bin": {
+    "docs-mcp": "./bin/docs-mcp"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "biome check .",
+    "fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "bench": "vitest bench --run",
+    "bench:diff": "bun run scripts/bench-diff.ts",
+    "build": "bun build ./src/index.ts --outdir dist --target bun",
+    "docs-mcp": "bun run bin/docs-mcp"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@mozilla/readability": "^0.6.0",
+    "citty": "^0.2.2",
+    "fast-xml-parser": "^5.8.0",
+    "linkedom": "^0.18.12",
+    "micromatch": "^4.0.8",
+    "p-queue": "^9.3.0",
+    "pino": "^10.3.1",
+    "robots-parser": "^3.0.1",
+    "sqlite-vec": "^0.1.9",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.15",
+    "@types/micromatch": "^4.0.10",
+    "@types/node": "^25.8.0",
+    "@types/turndown": "^5.0.6",
+    "@vitest/coverage-v8": "^4.1.6",
+    "bun-types": "^1.3.14",
+    "tinybench": "^6.0.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
+  }
+}

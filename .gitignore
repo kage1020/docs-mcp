@@ -1,0 +1,19 @@
+node_modules/
+dist/
+coverage/
+.vitest-cache/
+bun.lockb.bak
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.env
+.env.*
+!.env.example
+
+# local data (cache / sqlite)
+.docs-mcp/
+bench-result.json
+bench-baseline.json
