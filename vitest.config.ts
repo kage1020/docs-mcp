@@ -1,18 +1,16 @@
 import { defineConfig } from "vitest/config";
 
+// Vitest is only used for `vitest bench` (perf measurement).
+// Unit / integration tests run on Bun's native test runner (`bun test`),
+// because the storage layer depends on `bun:sqlite` which is not importable
+// from Node.
 export default defineConfig({
   test: {
-    pool: "forks",
-    include: ["test/**/*.test.ts"],
+    include: [],
     benchmark: {
       include: ["test/**/*.bench.ts"],
       reporters: ["default"],
       outputJson: "bench-result.json",
-    },
-    coverage: {
-      provider: "v8",
-      include: ["src/**/*.ts"],
-      exclude: ["src/cli/**", "src/**/*.bench.ts", "src/**/types.ts"],
     },
   },
 });
