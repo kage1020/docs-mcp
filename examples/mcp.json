@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "docs": {
+      "command": "bun",
+      "args": [
+        "run",
+        "/absolute/path/to/docs-mcp/bin/docs-mcp",
+        "serve",
+        "--stdio"
+      ],
+      "env": {
+        "DOCS_MCP_EMBEDDING_BASE_URL": "http://localhost:11434/v1",
+        "DOCS_MCP_EMBEDDING_MODEL": "nomic-embed-text"
+      }
+    }
+  }
+}
