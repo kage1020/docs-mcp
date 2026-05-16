@@ -34,7 +34,7 @@ export function startServer(handler: Handler): TestServer {
     },
     capturedRequests: captured,
     stop: async () => {
-      await server.stop(true);
+      server.stop(true);
     },
   };
 }
