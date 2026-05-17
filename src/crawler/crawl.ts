@@ -144,7 +144,7 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
             return;
           }
           const md = htmlToMarkdown(extracted.contentHtml);
-          const chunks = chunk(md);
+          const chunks = chunk(md, { leafLabel: true });
           const indexed = indexPage(
             db,
             {

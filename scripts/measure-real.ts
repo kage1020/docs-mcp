@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+import { mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 /**
  * Measure docs-mcp end-to-end against a real documentation site.
  * Usage:
@@ -6,14 +9,10 @@
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { mkdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { bootstrapContext } from "../src/cli/bootstrap.ts";
 import { buildMcpServer } from "../src/mcp/server.ts";
 
-const baseUrl =
-  process.argv[2] ?? "https://developers.google.com/google-ads/api/reference/rpc/v22";
+const baseUrl = process.argv[2] ?? "https://developers.google.com/google-ads/api/reference/rpc/v22";
 const maxPages = Number(process.argv[3] ?? "50");
 const QUERIES = ["campaign", "ad group", "conversion tracking", "report"];
 
@@ -87,13 +86,11 @@ async function main(): Promise<void> {
 
   const listRes = await client.callTool({ name: "list_sites", arguments: {} });
   const sites =
-    ((listRes.structuredContent as { sites?: Array<{ pageCount: number }> } | undefined)?.sites) ??
+    (listRes.structuredContent as { sites?: Array<{ pageCount: number }> } | undefined)?.sites ??
     [];
   const firstPageUrl =
     sites.length > 0
-      ? boot.ctx.db
-          .query<{ url: string }, []>("SELECT url FROM pages LIMIT 1")
-          .get()?.url ?? null
+      ? (boot.ctx.db.query<{ url: string }, []>("SELECT url FROM pages LIMIT 1").get()?.url ?? null)
       : null;
 
   if (firstPageUrl) {
@@ -120,7 +117,9 @@ async function main(): Promise<void> {
     )
     .all();
   for (const r of rows) {
-    console.log(`  [${r.chunks} chunks, ${r.size}B] ${r.title?.slice(0, 50) ?? "(no title)"} — ${r.url}`);
+    console.log(
+      `  [${r.chunks} chunks, ${r.size}B] ${r.title?.slice(0, 50) ?? "(no title)"} — ${r.url}`,
+    );
   }
   console.log(`\n  ${rows.length} unique URLs indexed`);
   console.log(`  unique URLs by row: ${new Set(rows.map((r) => r.url)).size}`);

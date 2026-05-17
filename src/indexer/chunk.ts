@@ -10,7 +10,51 @@ export type Chunk = {
 export type ChunkOptions = {
   maxTokens?: number;
   overlapTokens?: number;
+  leafLabel?: boolean;
 };
+
+const LEAF_LABEL_MAX = 80;
+
+function deriveLeafLabel(text: string, parentPath: string): string | null {
+  let sectionHeadingSeen = false;
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (line === "") continue;
+    if (line.startsWith("```") || line.startsWith("~~~")) return null;
+
+    const heading = line.match(/^#{1,6}\s+(.+?)\s*$/);
+    if (heading?.[1]) {
+      const text = clip(heading[1]);
+      if (!sectionHeadingSeen && (parentPath === text || parentPath.endsWith(`> ${text}`))) {
+        sectionHeadingSeen = true;
+        continue;
+      }
+      return text;
+    }
+
+    const linkLeading = line.match(/^[-*]?\s*\[`?([^`\]]+?)`?\]\(/);
+    if (linkLeading?.[1]) return clip(linkLeading[1]);
+
+    const inlineCode = line.match(/^[-*]?\s*`([^`]+)`/);
+    if (inlineCode?.[1]) return clip(inlineCode[1]);
+
+    // Plain prose lines are too noisy to make a useful identifier; give up.
+    return null;
+  }
+  return null;
+}
+
+function clip(s: string): string {
+  if (s.length <= LEAF_LABEL_MAX) return s;
+  return `${s.slice(0, LEAF_LABEL_MAX - 1)}…`;
+}
+
+function joinPath(parent: string, leaf: string | null): string {
+  if (!leaf) return parent;
+  if (parent === "") return leaf;
+  if (parent.endsWith(`> ${leaf}`) || parent === leaf) return parent;
+  return `${parent} > ${leaf}`;
+}
 
 type Section = {
   headingPath: string;
@@ -137,6 +181,7 @@ export function chunk(md: string, opts: ChunkOptions = {}): Chunk[] {
     }
   }
 
+  const wantLeaf = opts.leafLabel === true;
   const result: Chunk[] = [];
   let prevText = "";
   let prevPath: string | null = null;
@@ -148,9 +193,12 @@ export function chunk(md: string, opts: ChunkOptions = {}): Chunk[] {
       const tail = tailWithinTokens(prevText, overlapTokens);
       if (tail) body = `${tail}\n\n${entry.text}`;
     }
+    const headingPath = wantLeaf
+      ? joinPath(entry.headingPath, deriveLeafLabel(entry.text, entry.headingPath))
+      : entry.headingPath;
     result.push({
       ord: i,
-      headingPath: entry.headingPath,
+      headingPath,
       text: body,
       tokenCount: tokenCount(body),
     });
