@@ -57,6 +57,7 @@ export function getOrStartCrawl(ctx: ServerContext, input: StartCrawlInput): Ind
       if (ctx.embedClient) crawlInput.embedClient = ctx.embedClient;
       const result: CrawlResult = await crawl(crawlInput);
       task.result = result;
+      ctx.lastCrawlResults.set(input.siteId, result);
     } catch (err) {
       task.error = err instanceof Error ? err.message : String(err);
     } finally {

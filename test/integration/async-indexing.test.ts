@@ -32,6 +32,7 @@ describe("integration/async-indexing", () => {
       fetcher: fetchUrl,
       indexingTasks: new Map(),
       robotsCache: new Map(),
+      lastCrawlResults: new Map(),
     };
     const server = buildMcpServer(ctx);
     const [c, s] = InMemoryTransport.createLinkedPair();

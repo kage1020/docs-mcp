@@ -5,6 +5,7 @@ export type PlaywrightFetcherOptions = {
   userAgent?: string;
   defaultTimeoutMs?: number;
   defaultMaxBodyBytes?: number;
+  launchTimeoutMs?: number;
 };
 
 export type PlaywrightFetcherHandle = {
@@ -14,6 +15,7 @@ export type PlaywrightFetcherHandle = {
 
 const DEFAULT_TIMEOUT = 30_000;
 const DEFAULT_MAX_BODY = 5 * 1024 * 1024;
+const DEFAULT_LAUNCH_TIMEOUT = 60_000;
 
 function truncate(s: string, max: number): { body: string; truncated: boolean } {
   if (Buffer.byteLength(s, "utf8") <= max) return { body: s, truncated: false };
@@ -38,11 +40,12 @@ export async function createPlaywrightFetcher(
   const userAgent = opts.userAgent ?? DEFAULT_USER_AGENT;
   const defaultTimeoutMs = opts.defaultTimeoutMs ?? DEFAULT_TIMEOUT;
   const defaultMaxBodyBytes = opts.defaultMaxBodyBytes ?? DEFAULT_MAX_BODY;
+  const launchTimeoutMs = opts.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT;
 
   const { chromium } = await import("playwright");
   const browser: Browser = await chromium.launch({
     headless: true,
-    timeout: 60_000,
+    timeout: launchTimeoutMs,
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
   const context: BrowserContext = await browser.newContext({

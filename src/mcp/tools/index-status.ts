@@ -26,13 +26,12 @@ export function registerIndexStatus(server: McpServer, ctx: ServerContext): void
       const pagesIndexed = countPages(ctx.db, input.site_id);
       const chunksIndexed = countChunks(ctx.db, input.site_id);
       const status = task ? "indexing" : "idle";
+      const warnings = ctx.lastCrawlResults.get(input.site_id)?.warnings ?? [];
+      const baseText = `Site #${site.id} (${site.name}): ${status}, ${pagesIndexed} pages, ${chunksIndexed} chunks${task ? ` (running since ${new Date(task.startedAt).toISOString()})` : ""}`;
+      const text =
+        warnings.length > 0 ? `${baseText}\nwarnings:\n  - ${warnings.join("\n  - ")}` : baseText;
       return {
-        content: [
-          {
-            type: "text",
-            text: `Site #${site.id} (${site.name}): ${status}, ${pagesIndexed} pages, ${chunksIndexed} chunks${task ? ` (running since ${new Date(task.startedAt).toISOString()})` : ""}`,
-          },
-        ],
+        content: [{ type: "text", text }],
         structuredContent: {
           siteId: site.id,
           baseUrl: site.base_url,
@@ -43,6 +42,7 @@ export function registerIndexStatus(server: McpServer, ctx: ServerContext): void
           startedAt: task?.startedAt ?? null,
           lastCrawledAt: site.last_crawled_at,
           error: task?.error ?? null,
+          warnings,
         },
       };
     },

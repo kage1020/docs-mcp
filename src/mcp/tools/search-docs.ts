@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { search } from "../../search/search.ts";
+import { countPages } from "../../storage/repositories/pages.ts";
 import { getSite } from "../../storage/repositories/sites.ts";
 import type { ServerContext } from "../context.ts";
 import { SearchDocsShape } from "../schemas.ts";
@@ -14,11 +15,30 @@ export function registerSearchDocs(server: McpServer, ctx: ServerContext): void 
       inputSchema: SearchDocsShape,
     },
     async (input) => {
-      if (typeof input.site_id === "number" && !getSite(ctx.db, input.site_id)) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: `No site with id ${input.site_id}` }],
-        };
+      let siteEmpty = false;
+      if (typeof input.site_id === "number") {
+        const site = getSite(ctx.db, input.site_id);
+        if (!site) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: `No site with id ${input.site_id}` }],
+          };
+        }
+        if (countPages(ctx.db, input.site_id) === 0) {
+          siteEmpty = true;
+          const stillIndexing = ctx.indexingTasks.has(input.site_id);
+          const hint = stillIndexing
+            ? `Site #${input.site_id} (${site.name}) crawl is still running — no pages indexed yet. Poll index_status before searching.`
+            : `Site #${input.site_id} (${site.name}) has no pages indexed yet. Call add_site (or check index_status) before searching.`;
+          return {
+            content: [{ type: "text", text: hint }],
+            structuredContent: {
+              mode: "bm25",
+              hits: [],
+              siteEmpty: true,
+            },
+          };
+        }
       }
       const opts: Parameters<typeof search>[0] = {
         db: ctx.db,
@@ -48,6 +68,7 @@ export function registerSearchDocs(server: McpServer, ctx: ServerContext): void 
         structuredContent: {
           mode: result.mode,
           hits: result.hits,
+          siteEmpty,
         },
       };
     },

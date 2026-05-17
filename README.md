@@ -36,7 +36,7 @@ your agent config below. (Optional: `bun build --compile bin/docs-mcp
 Any OpenAI-compatible embeddings endpoint works. The simplest is Ollama:
 
 ```bash
-ollama pull nomic-embed-text
+ollama pull embeddinggemma
 # or any other embedding model — set DOCS_MCP_EMBEDDING_MODEL to match.
 ```
 
@@ -65,7 +65,7 @@ Edit `claude_desktop_config.json`:
       "args": ["run", "/ABSOLUTE/PATH/TO/docs-mcp/bin/docs-mcp", "serve", "--stdio"],
       "env": {
         "DOCS_MCP_EMBEDDING_BASE_URL": "http://localhost:11434/v1",
-        "DOCS_MCP_EMBEDDING_MODEL": "nomic-embed-text"
+        "DOCS_MCP_EMBEDDING_MODEL": "embeddinggemma"
       }
     }
   }
@@ -76,7 +76,7 @@ Restart Claude Desktop. The 7 tools appear under the hammer icon.
 </details>
 
 <details>
-<summary><b>Claude Code (project-scoped)</b></summary>
+<summary><b>Claude Code</b></summary>
 
 Create `.mcp.json` at the project root:
 
@@ -88,7 +88,7 @@ Create `.mcp.json` at the project root:
       "args": ["run", "/ABSOLUTE/PATH/TO/docs-mcp/bin/docs-mcp", "serve", "--stdio"],
       "env": {
         "DOCS_MCP_EMBEDDING_BASE_URL": "http://localhost:11434/v1",
-        "DOCS_MCP_EMBEDDING_MODEL": "nomic-embed-text"
+        "DOCS_MCP_EMBEDDING_MODEL": "embeddinggemma"
       }
     }
   }
@@ -116,7 +116,7 @@ Create `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
       "args": ["run", "/ABSOLUTE/PATH/TO/docs-mcp/bin/docs-mcp", "serve", "--stdio"],
       "env": {
         "DOCS_MCP_EMBEDDING_BASE_URL": "http://localhost:11434/v1",
-        "DOCS_MCP_EMBEDDING_MODEL": "nomic-embed-text"
+        "DOCS_MCP_EMBEDDING_MODEL": "embeddinggemma"
       }
     }
   }
@@ -143,7 +143,7 @@ Start the server once:
 
 ```bash
 DOCS_MCP_EMBEDDING_BASE_URL=http://localhost:11434/v1 \
-DOCS_MCP_EMBEDDING_MODEL=nomic-embed-text \
+DOCS_MCP_EMBEDDING_MODEL=embeddinggemma \
 bun run /ABSOLUTE/PATH/TO/docs-mcp/bin/docs-mcp serve --http --port 7777
 ```
 
@@ -228,6 +228,9 @@ Returns `structuredContent.hits` shaped like:
 ```
 
 Unknown `site_id` returns `isError: true` instead of silently empty hits.
+A *known but unindexed* `site_id` (e.g. crawl still running) returns
+`structuredContent.siteEmpty: true` plus a hint to poll `index_status`,
+so agents don't silently treat "no pages yet" as "no matching content".
 
 ### `get_doc`
 
@@ -264,13 +267,22 @@ Idempotent: calling twice with the same `base_url` returns the existing
 `siteId`. Parallel calls fold into a single background crawl.
 `wait: false` returns `structuredContent.status = "indexing"`.
 
+If a crawl yields 0 pages, or the base URL turns out to be a JS-rendered
+shell (no in-scope `<a>` links in raw HTML), `structuredContent.warnings`
+is populated — for example with a hint to set
+`DOCS_MCP_RENDER=playwright`.
+
 ### `index_status`
 
 ```jsonc
 { "site_id": 1 }
 // -> { status: "indexing"|"idle", pagesIndexed, chunksIndexed,
-//      startedAt, error: string|null }
+//      startedAt, error: string|null, warnings: string[] }
 ```
+
+`warnings` carries the most recent crawl's hints (e.g. "JS-rendered
+shell detected — try DOCS_MCP_RENDER=playwright") for the lifetime of
+the server process.
 
 ## Configuration (env)
 
@@ -279,10 +291,11 @@ Idempotent: calling twice with the same `base_url` returns the existing
 | `DOCS_MCP_DATA_DIR` | XDG data dir | SQLite DB location (Linux: `$XDG_DATA_HOME/docs-mcp`, macOS: `~/Library/Application Support/docs-mcp`, Windows: `%LOCALAPPDATA%\docs-mcp`) |
 | `DOCS_MCP_CACHE_DIR` | XDG cache dir | reserved |
 | `DOCS_MCP_EMBEDDING_BASE_URL` | _(unset)_ | e.g. `http://localhost:11434/v1` (Ollama) or `http://localhost:1234/v1` (LM Studio) |
-| `DOCS_MCP_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model name |
+| `DOCS_MCP_EMBEDDING_MODEL` | `embeddinggemma` | Embedding model name |
 | `DOCS_MCP_EMBEDDING_API_KEY` | _(unset)_ | Bearer token if required |
 | `DOCS_MCP_USER_AGENT` | `docs-mcp/<ver>` | Override the crawl User-Agent |
 | `DOCS_MCP_RENDER` | `fetch` | `fetch` (native) or `playwright` (JS-rendered SPA) |
+| `DOCS_MCP_PLAYWRIGHT_LAUNCH_TIMEOUT` | `60000` | Chromium launch timeout (ms). Increase on cold/slow hosts where the 60s default trips. |
 | `LOG_LEVEL` | `info` | pino log level |
 
 When the embedding endpoint is unreachable, the server logs a warning and
@@ -329,43 +342,6 @@ Indicative single-thread numbers (Ubuntu CI runner):
 | `search/hybrid.rrf` (top-50 × 2) | ~10 µs |
 | `storage/migrate.migrate` (empty DB) | ~2 ms |
 
-## Architecture
-
-```
-src/
-├── cli/          # subcommand dispatcher + bootstrap (DB open, migrate, probe)
-├── mcp/
-│   ├── server.ts        # McpServer + tool registration
-│   ├── context.ts       # ServerContext (db, queue, embed, indexingTasks, robotsCache)
-│   ├── indexing-tasks.ts # getOrStartCrawl (dedupes parallel add_site)
-│   └── tools/           # 7 tool handlers
-├── crawler/      # url / robots / sitemap (gzip) / queue / fetcher /
-│                 # playwright-fetcher / crawl (raw-HTML link harvest)
-├── extractor/    # readability + linkedom + turndown(GFM), with
-│                 # main/article fallback when Readability under-extracts
-├── indexer/      # heading-aware chunking with leaf-label identifier,
-│                 # CJK-aware token approximation, indexPage,
-│                 # embedAndStoreChunks
-├── search/       # BM25 / vector / hybrid (RRF) / mode dispatch +
-│                 # per-page diversity cap
-├── embedding/    # OpenAI-compatible client + probe + batch
-├── storage/      # bun:sqlite + sqlite-vec (canary-verified), user_version
-│                 # migrations, repositories
-├── config/       # XDG paths + zod env schema
-└── logger.ts     # pino → stderr
-```
-
-## Development
-
-- TDD: each phase has acceptance criteria locked in `docs/ac/phase-XX.md`.
-- `bun run test` — Bun's native runner; vec-dependent tests auto-skip on
-  hosts where sqlite-vec can't load.
-- `bun run bench` — vitest bench; `bun run bench:diff` for regression guard.
-- `bun run check` runs Biome (no `@ts-ignore`/`biome-ignore` allowed).
-- `bun run typecheck` runs `tsc --noEmit` against the strict config
-  (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`).
-- CI runs the test matrix on ubuntu / macos / windows + bench guard on ubuntu.
-
 ## License
 
-MIT (TBD)
+MIT
