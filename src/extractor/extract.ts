@@ -79,6 +79,29 @@ function extractTitle(doc: Document): string | null {
   return h1 ?? null;
 }
 
+const FALLBACK_SELECTORS = ["main", "article", '[role="main"]'];
+const LOW_SCORE_RATIO = 0.05;
+const FALLBACK_GAIN_MIN = 2;
+
+function textLengthOf(html: string): number {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim().length;
+}
+
+function pickLargestFallback(doc: Document): { html: string; length: number } | null {
+  let best: { html: string; length: number } | null = null;
+  for (const sel of FALLBACK_SELECTORS) {
+    for (const el of Array.from(doc.querySelectorAll(sel)) as Element[]) {
+      const html = el.innerHTML;
+      const len = textLengthOf(html);
+      if (!best || len > best.length) best = { html, length: len };
+    }
+  }
+  return best;
+}
+
 export function extract({ url, html }: ExtractInput): Extracted | null {
   if (typeof html !== "string" || html.trim() === "") return null;
 
@@ -108,12 +131,22 @@ export function extract({ url, html }: ExtractInput): Extracted | null {
     // fall back below
   }
 
-  if (!articleHtml) {
-    const main =
-      document.querySelector("main") ??
-      document.querySelector("article") ??
-      document.querySelector("body");
-    articleHtml = main?.innerHTML ?? null;
+  const bodyLen = textLengthOf(document.body?.innerHTML ?? "");
+  const readabilityLen = articleHtml ? textLengthOf(articleHtml) : 0;
+  const suspectShort =
+    articleHtml !== null && bodyLen > 0 && readabilityLen < bodyLen * LOW_SCORE_RATIO;
+
+  if (!articleHtml || suspectShort) {
+    const candidate = pickLargestFallback(document as unknown as Document);
+    if (
+      candidate &&
+      candidate.length > 0 &&
+      (!articleHtml || candidate.length >= readabilityLen * FALLBACK_GAIN_MIN)
+    ) {
+      articleHtml = candidate.html;
+    } else if (!articleHtml) {
+      articleHtml = document.body?.innerHTML ?? null;
+    }
   }
 
   if (!articleHtml || articleHtml.trim() === "") return null;
