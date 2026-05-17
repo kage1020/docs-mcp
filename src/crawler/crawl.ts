@@ -164,7 +164,10 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
           else result.pagesUnchanged++;
 
           if (depth + 1 <= maxDepth) {
-            for (const link of collectLinks(extracted.contentHtml, url)) {
+            // Walk the *raw* HTML for follow-up links — most docs sites
+            // keep their table of contents inside <nav> / <aside> /
+            // sidebar elements that extract() strips before returning.
+            for (const link of collectLinks(res.body, url)) {
               enqueue(link, depth + 1);
             }
           }
