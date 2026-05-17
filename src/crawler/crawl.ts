@@ -182,7 +182,27 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
     inflight.add(wrapped);
   };
 
-  const seeds = initialUrls && initialUrls.length > 0 ? initialUrls : [baseUrl];
+  // Keep only initialUrls that fall under baseUrl. Sitemaps for many sites
+  // (e.g. developers.facebook.com) include URLs outside the requested
+  // subtree — if we used them as-is, every seed would be skipped and the
+  // crawl would index nothing. Always include baseUrl itself so a crawl
+  // can never start empty even when the sitemap is wholly out-of-scope or
+  // unparseable.
+  const seedSet = new Set<string>();
+  const seeds: string[] = [];
+  const addSeed = (rawUrl: string) => {
+    try {
+      const norm = normalize(rawUrl, { baseUrl });
+      if (seedSet.has(norm)) return;
+      if (!isUnderBase(norm, baseUrl)) return;
+      seedSet.add(norm);
+      seeds.push(rawUrl);
+    } catch {
+      // skip invalid URL
+    }
+  };
+  if (initialUrls) for (const u of initialUrls) addSeed(u);
+  addSeed(baseUrl);
   for (const seed of seeds) enqueue(seed, 0);
 
   while (inflight.size > 0) {
