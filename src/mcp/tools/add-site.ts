@@ -64,12 +64,18 @@ export function registerAddSite(server: McpServer, ctx: ServerContext): void {
       const chunksIndexed = countChunks(ctx.db, siteId);
       const stillIndexing = ctx.indexingTasks.has(siteId);
       const status = stillIndexing ? "indexing" : task.error ? "failed" : "idle";
+      const warnings = task.result?.warnings ?? [];
 
-      const summary = stillIndexing
+      const summaryHead = stillIndexing
         ? `Site #${siteId} (${existing ? existing.name : name}) — crawl running in background (${pagesIndexed} pages so far).`
         : task.error
           ? `Site #${siteId} (${existing ? existing.name : name}) — crawl failed: ${task.error}`
           : `Site #${siteId} (${existing ? existing.name : name}) — ${pagesIndexed} pages, ${chunksIndexed} chunks indexed.`;
+
+      const summary =
+        warnings.length > 0
+          ? `${summaryHead}\nwarnings:\n  - ${warnings.join("\n  - ")}`
+          : summaryHead;
 
       return {
         content: [{ type: "text", text: summary }],
@@ -81,6 +87,7 @@ export function registerAddSite(server: McpServer, ctx: ServerContext): void {
           pagesIndexed,
           chunksIndexed,
           error: task.error ?? null,
+          warnings,
           startedAt: task.startedAt,
           alreadyExisted: !!existing,
         },

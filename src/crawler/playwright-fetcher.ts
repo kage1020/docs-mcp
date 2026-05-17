@@ -1,10 +1,13 @@
-import type { Browser, BrowserContext } from "playwright";
+import { type ChildProcess, spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { DEFAULT_USER_AGENT, type FetchOptions, type FetchResult } from "./fetcher.ts";
 
 export type PlaywrightFetcherOptions = {
   userAgent?: string;
   defaultTimeoutMs?: number;
   defaultMaxBodyBytes?: number;
+  launchTimeoutMs?: number;
+  nodePath?: string;
 };
 
 export type PlaywrightFetcherHandle = {
@@ -14,22 +17,35 @@ export type PlaywrightFetcherHandle = {
 
 const DEFAULT_TIMEOUT = 30_000;
 const DEFAULT_MAX_BODY = 5 * 1024 * 1024;
+const DEFAULT_LAUNCH_TIMEOUT = 60_000;
 
-function truncate(s: string, max: number): { body: string; truncated: boolean } {
-  if (Buffer.byteLength(s, "utf8") <= max) return { body: s, truncated: false };
-  // Walk the string until adding the next codepoint would exceed max bytes.
-  let bytes = 0;
-  let cutoff = s.length;
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i] ?? "";
-    const inc = Buffer.byteLength(ch, "utf8");
-    if (bytes + inc > max) {
-      cutoff = i;
-      break;
-    }
-    bytes += inc;
-  }
-  return { body: s.slice(0, cutoff), truncated: true };
+type FetchResponse = {
+  id: number;
+  ok: true;
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+  url: string;
+  bodyTruncated: boolean;
+};
+type FetchErrorResponse = {
+  id: number;
+  ok: false;
+  error: string;
+};
+type WorkerMessage =
+  | { type: "ready" }
+  | { type: "launch_error"; message: string }
+  | FetchResponse
+  | FetchErrorResponse;
+
+type Pending = {
+  resolve: (value: FetchResponse) => void;
+  reject: (err: Error) => void;
+};
+
+function workerScriptPath(): string {
+  return fileURLToPath(new URL("./playwright-worker.mjs", import.meta.url));
 }
 
 export async function createPlaywrightFetcher(
@@ -38,67 +54,188 @@ export async function createPlaywrightFetcher(
   const userAgent = opts.userAgent ?? DEFAULT_USER_AGENT;
   const defaultTimeoutMs = opts.defaultTimeoutMs ?? DEFAULT_TIMEOUT;
   const defaultMaxBodyBytes = opts.defaultMaxBodyBytes ?? DEFAULT_MAX_BODY;
+  const launchTimeoutMs = opts.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT;
+  const nodePath = opts.nodePath ?? "node";
 
-  const { chromium } = await import("playwright");
-  const browser: Browser = await chromium.launch({
-    headless: true,
-    timeout: 60_000,
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+  const scriptPath = workerScriptPath();
+  const child: ChildProcess = spawn(nodePath, [scriptPath], {
+    stdio: ["pipe", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      DOCS_MCP_PLAYWRIGHT_LAUNCH_TIMEOUT: String(launchTimeoutMs),
+      DOCS_MCP_USER_AGENT: userAgent,
+    },
+    windowsHide: true,
   });
-  const context: BrowserContext = await browser.newContext({
-    userAgent,
-    javaScriptEnabled: true,
-    bypassCSP: true,
+
+  const stdin = child.stdin;
+  const stdout = child.stdout;
+  const stderr = child.stderr;
+  if (!stdin || !stdout || !stderr) {
+    child.kill("SIGTERM");
+    throw new Error("playwright-fetcher: failed to obtain child stdio pipes");
+  }
+
+  // Forward worker stderr to parent stderr (logs, warnings).
+  stderr.setEncoding("utf-8");
+  stderr.on("data", (chunk: string) => {
+    process.stderr.write(chunk);
   });
+
+  let nextId = 0;
+  const pending = new Map<number, Pending>();
+
+  const onWorkerExit = (code: number | null, signal: NodeJS.Signals | null) => {
+    const reason = `playwright worker exited (code=${code}, signal=${signal})`;
+    for (const [, p] of pending) p.reject(new Error(reason));
+    pending.clear();
+  };
+  child.once("exit", onWorkerExit);
+
+  // Wait for "ready" (or launch_error) before returning the handle.
+  await new Promise<void>((resolve, reject) => {
+    const onReadyData = (chunk: string) => {
+      buffer += chunk;
+      let nl = buffer.indexOf("\n");
+      while (nl >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line) {
+          nl = buffer.indexOf("\n");
+          continue;
+        }
+        try {
+          const msg = JSON.parse(line) as WorkerMessage;
+          if (msg && "type" in msg && msg.type === "ready") {
+            stdout.off("data", onReadyData);
+            child.off("exit", onReadyExit);
+            // Hand stdout off to the steady-state dispatcher.
+            stdout.on("data", onSteadyData);
+            // Replay anything still in the buffer.
+            if (buffer.length > 0) {
+              const replay = buffer;
+              buffer = "";
+              onSteadyData(replay);
+            }
+            resolve();
+            return;
+          }
+          if (msg && "type" in msg && msg.type === "launch_error") {
+            stdout.off("data", onReadyData);
+            child.off("exit", onReadyExit);
+            reject(new Error(`playwright launch failed: ${msg.message}`));
+            return;
+          }
+        } catch {
+          // ignore malformed pre-ready output
+        }
+        nl = buffer.indexOf("\n");
+      }
+    };
+    const onReadyExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      stdout.off("data", onReadyData);
+      reject(new Error(`playwright worker died before ready (code=${code}, signal=${signal})`));
+    };
+    let buffer = "";
+    stdout.setEncoding("utf-8");
+    stdout.on("data", onReadyData);
+    child.once("exit", onReadyExit);
+    // Hard deadline: launch timeout + 5s grace.
+    setTimeout(() => {
+      stdout.off("data", onReadyData);
+      child.off("exit", onReadyExit);
+      reject(new Error(`playwright worker did not become ready in ${launchTimeoutMs}ms`));
+    }, launchTimeoutMs + 5_000).unref?.();
+  });
+
+  let steadyBuffer = "";
+  function onSteadyData(chunk: string): void {
+    steadyBuffer += chunk;
+    for (;;) {
+      const nl = steadyBuffer.indexOf("\n");
+      if (nl < 0) break;
+      const line = steadyBuffer.slice(0, nl).trim();
+      steadyBuffer = steadyBuffer.slice(nl + 1);
+      if (!line) continue;
+      let msg: WorkerMessage;
+      try {
+        msg = JSON.parse(line) as WorkerMessage;
+      } catch {
+        continue;
+      }
+      if ("type" in msg) continue;
+      const p = pending.get(msg.id);
+      if (!p) continue;
+      pending.delete(msg.id);
+      if (msg.ok) p.resolve(msg);
+      else p.reject(new Error(msg.error));
+    }
+  }
 
   return {
     async fetch(url, fetchOpts = {}): Promise<FetchResult> {
+      const id = ++nextId;
       const timeoutMs = fetchOpts.timeoutMs ?? defaultTimeoutMs;
       const maxBodyBytes = fetchOpts.maxBodyBytes ?? defaultMaxBodyBytes;
       const signal = fetchOpts.signal;
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-      if (signal?.aborted) {
-        throw new DOMException("Aborted", "AbortError");
-      }
-
-      const page = await context.newPage();
-      const onAbort = () => {
-        // best-effort: close the page to unblock goto
-        page.close({ runBeforeUnload: false }).catch(() => undefined);
-      };
-      signal?.addEventListener("abort", onAbort, { once: true });
-
-      try {
-        const response = await page.goto(url, {
-          waitUntil: "domcontentloaded",
-          timeout: timeoutMs,
-        });
-        try {
-          await page.waitForLoadState("networkidle", { timeout: Math.min(timeoutMs, 8_000) });
-        } catch {
-          // ignore — some sites keep long-poll connections open
+      const promise = new Promise<FetchResponse>((resolve, reject) => {
+        pending.set(id, { resolve, reject });
+        stdin.write(`${JSON.stringify({ id, op: "fetch", url, timeoutMs, maxBodyBytes })}\n`);
+        if (signal) {
+          const onAbort = () => {
+            if (pending.delete(id)) reject(new DOMException("Aborted", "AbortError"));
+          };
+          signal.addEventListener("abort", onAbort, { once: true });
         }
-        const status = response?.status() ?? 0;
-        const headerRecord = response?.headers() ?? {};
-        const headers = new Headers();
-        for (const [k, v] of Object.entries(headerRecord)) headers.set(k, v);
-        const rawBody = await page.content();
-        const { body, truncated } = truncate(rawBody, maxBodyBytes);
-        return {
-          status,
-          headers,
-          body,
-          url: page.url() || url,
-          bodyTruncated: truncated,
-        };
-      } finally {
-        signal?.removeEventListener("abort", onAbort);
-        if (!page.isClosed()) await page.close();
+        // Hard parent-side ceiling: if the worker never replies (page.goto
+        // wedged inside chromium, for example), give up at 2× the page
+        // timeout instead of dangling forever.
+        const ceiling = timeoutMs * 2 + 5_000;
+        setTimeout(() => {
+          if (pending.delete(id))
+            reject(new Error(`playwright fetch ${url} timed out after ${ceiling}ms`));
+        }, ceiling).unref?.();
+      });
+      const res = await promise;
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(res.headers)) {
+        // Some upstream servers emit malformed header values (e.g. multi-line
+        // permissions-policy with embedded newlines). The HTTP spec forbids
+        // these but they reach us anyway; Headers.set() throws. Skip them
+        // rather than failing the entire fetch.
+        try {
+          headers.set(k, v);
+        } catch {}
       }
+      return {
+        status: res.status,
+        headers,
+        body: res.body,
+        url: res.url || url,
+        bodyTruncated: res.bodyTruncated,
+      };
     },
-    async close() {
-      await context.close();
-      await browser.close();
+    async close(): Promise<void> {
+      child.off("exit", onWorkerExit);
+      try {
+        stdin.write(`${JSON.stringify({ op: "close" })}\n`);
+        stdin.end();
+      } catch {
+        // pipe may already be closed
+      }
+      await new Promise<void>((resolve) => {
+        if (child.exitCode !== null) {
+          resolve();
+          return;
+        }
+        child.once("exit", () => resolve());
+        setTimeout(() => {
+          child.kill("SIGKILL");
+          resolve();
+        }, 5_000).unref?.();
+      });
     },
   };
 }

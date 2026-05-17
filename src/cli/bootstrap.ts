@@ -85,6 +85,7 @@ export async function bootstrapContext(
     embeddingsAvailable,
     indexingTasks: new Map(),
     robotsCache: new Map(),
+    lastCrawlResults: new Map(),
   };
   if (embedQuery) ctx.embedQuery = embedQuery;
   if (ctxEmbedClient) ctx.embedClient = ctxEmbedClient;
@@ -93,12 +94,17 @@ export async function bootstrapContext(
   let renderShutdown: (() => Promise<void>) | null = null;
   if (env.DOCS_MCP_RENDER === "playwright") {
     const { createPlaywrightFetcher } = await import("../crawler/playwright-fetcher.ts");
-    const pfOpts: Parameters<typeof createPlaywrightFetcher>[0] = {};
+    const pfOpts: Parameters<typeof createPlaywrightFetcher>[0] = {
+      launchTimeoutMs: env.DOCS_MCP_PLAYWRIGHT_LAUNCH_TIMEOUT,
+    };
     if (env.DOCS_MCP_USER_AGENT) pfOpts.userAgent = env.DOCS_MCP_USER_AGENT;
     const handle = await createPlaywrightFetcher(pfOpts);
     ctx.fetcher = handle.fetch;
     renderShutdown = handle.close;
-    log.info({ render: "playwright" }, "playwright fetcher is active");
+    log.info(
+      { render: "playwright", launchTimeoutMs: env.DOCS_MCP_PLAYWRIGHT_LAUNCH_TIMEOUT },
+      "playwright fetcher is active",
+    );
   }
 
   return {

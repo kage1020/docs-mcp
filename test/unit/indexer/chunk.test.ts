@@ -7,21 +7,51 @@ describe("indexer/chunk", () => {
     expect(chunk("   \n\n  ")).toEqual([]);
   });
 
-  it("splits on h1/h2/h3 boundaries and builds heading_path with >", () => {
-    const md = ["# A", "", "alpha", "", "## B", "", "beta", "", "### C", "", "gamma"].join("\n");
+  it("splits on h1/h2/h3/h4 boundaries and builds heading_path with >", () => {
+    const md = [
+      "# A",
+      "",
+      "alpha",
+      "",
+      "## B",
+      "",
+      "beta",
+      "",
+      "### C",
+      "",
+      "gamma",
+      "",
+      "#### D",
+      "",
+      "delta",
+    ].join("\n");
     const chunks = chunk(md);
-    expect(chunks.length).toBeGreaterThanOrEqual(3);
+    expect(chunks.length).toBeGreaterThanOrEqual(4);
     expect(chunks[0]?.headingPath).toBe("A");
     expect(chunks[1]?.headingPath).toBe("A > B");
     expect(chunks[2]?.headingPath).toBe("A > B > C");
+    expect(chunks[3]?.headingPath).toBe("A > B > C > D");
   });
 
-  it("keeps h4 inside the current chunk (no new heading_path segment)", () => {
-    const md = ["# A", "", "alpha", "", "#### sub", "", "beta"].join("\n");
+  it("AC-35.1: keeps h5/h6 inside the current chunk (h4 is the deepest split)", () => {
+    const md = [
+      "# A",
+      "",
+      "alpha",
+      "",
+      "##### sub",
+      "",
+      "beta",
+      "",
+      "###### subsub",
+      "",
+      "gamma",
+    ].join("\n");
     const chunks = chunk(md);
     expect(chunks).toHaveLength(1);
     expect(chunks[0]?.headingPath).toBe("A");
-    expect(chunks[0]?.text).toContain("#### sub");
+    expect(chunks[0]?.text).toContain("##### sub");
+    expect(chunks[0]?.text).toContain("###### subsub");
   });
 
   it("does not split inside a fenced code block", () => {

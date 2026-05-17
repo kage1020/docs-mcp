@@ -35,6 +35,7 @@ export type CrawlResult = {
   pagesUpdated: number;
   pagesUnchanged: number;
   pagesSkipped: number;
+  warnings: string[];
 };
 
 function collectLinks(html: string, pageUrl: string): string[] {
@@ -80,11 +81,26 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
     pagesUpdated: 0,
     pagesUnchanged: 0,
     pagesSkipped: 0,
+    warnings: [],
   };
 
   const visited = new Set<string>();
   const inflight = new Set<Promise<void>>();
   let enqueuedCount = 0;
+  let fetchAttempts = 0;
+  const normalizedBase = (() => {
+    try {
+      return normalize(baseUrl, { baseUrl });
+    } catch {
+      return baseUrl;
+    }
+  })();
+  const rootInfo: { fetched: boolean; status: number; bodyBytes: number; inScopeLinks: number } = {
+    fetched: false,
+    status: 0,
+    bodyBytes: 0,
+    inScopeLinks: 0,
+  };
 
   const accept = (url: string): boolean => {
     if (!isUnderBase(url, baseUrl)) return false;
@@ -137,10 +153,30 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
           const fetchOpts: FetchOptions = {};
           if (signal) fetchOpts.signal = signal;
           if (userAgent) fetchOpts.userAgent = userAgent;
+          fetchAttempts++;
           const res = await fetcher(url, fetchOpts);
+          const isRoot = url === normalizedBase;
+          if (isRoot) {
+            rootInfo.fetched = true;
+            rootInfo.status = res.status;
+            rootInfo.bodyBytes = res.body.length;
+          }
           if (res.status !== 200 || res.body === "") {
             result.pagesSkipped++;
             return;
+          }
+          if (isRoot) {
+            // Count links from raw root HTML that fall under baseUrl —
+            // an SPA shell typically has zero of these.
+            let inScope = 0;
+            for (const link of collectLinks(res.body, url)) {
+              try {
+                if (isUnderBase(normalize(link, { baseUrl }), baseUrl)) inScope++;
+              } catch {
+                // ignore invalid links
+              }
+            }
+            rootInfo.inScopeLinks = inScope;
           }
           const extracted = extract({ url, html: res.body });
           if (!extracted) {
@@ -218,6 +254,18 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
 
   while (inflight.size > 0) {
     await Promise.all([...inflight]);
+  }
+
+  const indexed = result.pagesAdded + result.pagesUpdated + result.pagesUnchanged;
+  if (indexed === 0 && fetchAttempts > 0) {
+    result.warnings.push(
+      `Crawl indexed 0 pages despite ${fetchAttempts} fetch attempt(s) — check include/exclude patterns, robots.txt, or the base URL itself.`,
+    );
+  }
+  if (rootInfo.fetched && rootInfo.status === 200 && rootInfo.inScopeLinks === 0 && indexed <= 1) {
+    result.warnings.push(
+      "Base URL appears to be a JS-rendered shell (no in-scope links found in raw HTML). Try `DOCS_MCP_RENDER=playwright` to enable browser rendering.",
+    );
   }
 
   touchLastCrawledAt(db, siteId, now());

@@ -24,4 +24,5 @@ export type ServerContext = {
   userAgent?: string;
   indexingTasks: Map<number, IndexingTask>;
   robotsCache: Map<string, RobotsAdvisor>;
+  lastCrawlResults: Map<number, CrawlResult>;
 };

@@ -92,6 +92,7 @@ describe("search/hybrid > rrf", () => {
         pageTitle: "t",
         headingPath: "h",
         snippet: "s",
+        text: "Sample paragraph for chunk 10.",
         bm25Score: -2,
       },
       {
@@ -100,6 +101,7 @@ describe("search/hybrid > rrf", () => {
         pageTitle: "t",
         headingPath: "h",
         snippet: "s",
+        text: "Sample paragraph for chunk 11.",
         bm25Score: -1,
       },
     ];

@@ -62,7 +62,10 @@ type Section = {
 };
 
 const FENCE_RE = /^(```|~~~)/;
-const HEADING_RE = /^(#{1,3})\s+(.+)$/;
+// Split on h1-h4 so per-field spec-table chunks (which use <h4>fieldName</h4>)
+// land in their own chunk and the field name reaches heading_path. h5/h6
+// stay inline — they're typically intra-section markers, not boundaries.
+const HEADING_RE = /^(#{1,4})\s+(.+)$/;
 
 type FenceState = { inFence: boolean; marker: string };
 
