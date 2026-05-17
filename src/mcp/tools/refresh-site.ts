@@ -59,6 +59,7 @@ export function registerRefreshSite(server: McpServer, ctx: ServerContext): void
       if (typeof opts.maxDepth === "number") crawlInput.maxDepth = opts.maxDepth;
       if (typeof opts.maxPages === "number") crawlInput.maxPages = opts.maxPages;
       if (ctx.userAgent) crawlInput.userAgent = ctx.userAgent;
+      if (ctx.embedClient) crawlInput.embedClient = ctx.embedClient;
 
       const result = await crawl(crawlInput);
       return {

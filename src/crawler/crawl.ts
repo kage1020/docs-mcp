@@ -1,8 +1,10 @@
 import type { Database } from "bun:sqlite";
 import { parseHTML } from "linkedom";
+import type { EmbeddingClient } from "../embedding/client.ts";
 import { extract } from "../extractor/extract.ts";
 import { htmlToMarkdown } from "../extractor/markdown.ts";
 import { chunk } from "../indexer/chunk.ts";
+import { embedAndStoreChunks } from "../indexer/embed-chunks.ts";
 import { indexPage } from "../indexer/index-page.ts";
 import { touchLastCrawledAt } from "../storage/repositories/sites.ts";
 import { type FetchOptions, type FetchResult, fetchUrl } from "./fetcher.ts";
@@ -23,6 +25,7 @@ export type CrawlOptions = {
   db: Database;
   userAgent?: string;
   fetcher?: (url: string, opts?: FetchOptions) => Promise<FetchResult>;
+  embedClient?: EmbeddingClient;
   now?: () => number;
   signal?: AbortSignal;
 };
@@ -67,6 +70,7 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
     db,
     userAgent,
     fetcher = fetchUrl,
+    embedClient,
     now = () => Date.now(),
     signal,
   } = opts;
@@ -162,6 +166,10 @@ export async function crawl(opts: CrawlOptions): Promise<CrawlResult> {
           if (indexed.state === "inserted") result.pagesAdded++;
           else if (indexed.state === "updated") result.pagesUpdated++;
           else result.pagesUnchanged++;
+
+          if (embedClient && indexed.state !== "unchanged" && indexed.chunkCount > 0) {
+            await embedAndStoreChunks(db, indexed.pageId, embedClient);
+          }
 
           if (depth + 1 <= maxDepth) {
             // Walk the *raw* HTML for follow-up links — most docs sites

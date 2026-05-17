@@ -44,6 +44,7 @@ export async function bootstrapContext(
 
   let embeddingsAvailable = false;
   let embedQuery: ServerContext["embedQuery"];
+  let ctxEmbedClient: ServerContext["embedClient"];
   if (env.DOCS_MCP_EMBEDDING_BASE_URL) {
     const probeOpts: Parameters<typeof probeEmbedding>[0] = {
       baseUrl: env.DOCS_MCP_EMBEDDING_BASE_URL,
@@ -70,6 +71,7 @@ export async function bootstrapContext(
         const out = await client.embed([q]);
         return out[0] ?? [];
       };
+      ctxEmbedClient = client;
       log.info({ dim: probe.dim }, "embedding endpoint is available");
     } else {
       log.warn({ reason: probe.reason }, "embedding endpoint is unavailable; falling back to BM25");
@@ -83,6 +85,7 @@ export async function bootstrapContext(
     embeddingsAvailable,
   };
   if (embedQuery) ctx.embedQuery = embedQuery;
+  if (ctxEmbedClient) ctx.embedClient = ctxEmbedClient;
   if (env.DOCS_MCP_USER_AGENT) ctx.userAgent = env.DOCS_MCP_USER_AGENT;
 
   let renderShutdown: (() => Promise<void>) | null = null;

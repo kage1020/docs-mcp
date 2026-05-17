@@ -75,6 +75,7 @@ export function registerAddSite(server: McpServer, ctx: ServerContext): void {
       };
       if (input.include_patterns) crawlInput.includePatterns = input.include_patterns;
       if (input.exclude_patterns) crawlInput.excludePatterns = input.exclude_patterns;
+      if (ctx.embedClient) crawlInput.embedClient = ctx.embedClient;
       const result = await crawl(crawlInput);
 
       const pagesIndexed = countPages(ctx.db, siteId);
