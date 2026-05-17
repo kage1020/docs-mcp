@@ -40,6 +40,16 @@ export const AddSiteShape = {
     .describe("Micromatch patterns to exclude (negated)"),
   max_depth: z.number().int().min(0).max(20).default(5),
   max_pages: z.number().int().min(1).max(20_000).default(2_000),
+  wait: z
+    .boolean()
+    .default(true)
+    .describe(
+      "If false, return immediately and crawl in the background. Use index_status to poll.",
+    ),
+};
+
+export const IndexStatusShape = {
+  site_id: z.number().int().describe("Site to inspect"),
 };
 
 export const RemoveSiteShape = {

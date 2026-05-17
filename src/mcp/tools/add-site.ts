@@ -1,12 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { crawl } from "../../crawler/crawl.ts";
-import { fetchUrl } from "../../crawler/fetcher.ts";
-import { loadRobots, loadSitemap } from "../../crawler/site-setup.ts";
 import { normalize } from "../../crawler/url.ts";
 import { countChunks } from "../../storage/repositories/chunks.ts";
 import { countPages } from "../../storage/repositories/pages.ts";
 import { createSite, getSiteByBaseUrl } from "../../storage/repositories/sites.ts";
 import type { ServerContext } from "../context.ts";
+import { getOrStartCrawl } from "../indexing-tasks.ts";
 import { AddSiteShape } from "../schemas.ts";
 
 function deriveName(baseUrl: string): string {
@@ -20,24 +18,17 @@ function deriveName(baseUrl: string): string {
 }
 
 export function registerAddSite(server: McpServer, ctx: ServerContext): void {
-  const fetcher = ctx.fetcher ?? fetchUrl;
   server.registerTool(
     "add_site",
     {
       title: "Index a documentation site",
       description:
-        "Crawls a documentation site (sitemap.xml first, BFS fallback) and indexes every page into the local DB.",
+        "Crawls a documentation site (sitemap.xml first, BFS fallback) and indexes every page into the local DB. Idempotent: a second call for the same base URL returns the existing site (and folds into any in-flight crawl). Pass wait:false to run the crawl in the background.",
       inputSchema: AddSiteShape,
     },
     async (input) => {
       const baseUrl = normalize(input.base_url);
       const existing = getSiteByBaseUrl(ctx.db, baseUrl);
-      if (existing) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: `Site already exists with id ${existing.id}` }],
-        };
-      }
       const name = input.name ?? deriveName(baseUrl);
       const crawlOptions = {
         includePatterns: input.include_patterns,
@@ -45,55 +36,53 @@ export function registerAddSite(server: McpServer, ctx: ServerContext): void {
         maxDepth: input.max_depth,
         maxPages: input.max_pages,
       };
-      const siteId = createSite(ctx.db, {
-        baseUrl,
-        name,
-        crawlOptionsJson: JSON.stringify(crawlOptions),
-      });
 
-      const { advisor, raw } = await loadRobots(baseUrl, fetcher);
-      if (raw) {
-        ctx.db.prepare("UPDATE sites SET robots_txt = ? WHERE id = ?").run(raw, siteId);
-        const delay = advisor.crawlDelay(ctx.userAgent ?? "docs-mcp");
-        if (typeof delay === "number" && delay > 0) {
-          ctx.queue.setOriginCrawlDelay(new URL(baseUrl).origin, delay);
-        }
-      }
+      const siteId =
+        existing?.id ??
+        createSite(ctx.db, {
+          baseUrl,
+          name,
+          crawlOptionsJson: JSON.stringify(crawlOptions),
+        });
 
-      const sitemapUrls = await loadSitemap(baseUrl, fetcher, {}, advisor.sitemaps());
-      const crawlInput: Parameters<typeof crawl>[0] = {
+      const startInput: Parameters<typeof getOrStartCrawl>[1] = {
         siteId,
         baseUrl,
-        initialUrls: sitemapUrls,
         maxDepth: input.max_depth,
         maxPages: input.max_pages,
-        queue: ctx.queue,
-        robots: advisor,
-        db: ctx.db,
-        fetcher,
-        userAgent: ctx.userAgent ?? "docs-mcp",
       };
-      if (input.include_patterns) crawlInput.includePatterns = input.include_patterns;
-      if (input.exclude_patterns) crawlInput.excludePatterns = input.exclude_patterns;
-      if (ctx.embedClient) crawlInput.embedClient = ctx.embedClient;
-      const result = await crawl(crawlInput);
+      if (input.include_patterns) startInput.includePatterns = input.include_patterns;
+      if (input.exclude_patterns) startInput.excludePatterns = input.exclude_patterns;
+
+      const task = getOrStartCrawl(ctx, startInput);
+
+      if (input.wait) {
+        await task.promise;
+      }
 
       const pagesIndexed = countPages(ctx.db, siteId);
       const chunksIndexed = countChunks(ctx.db, siteId);
+      const stillIndexing = ctx.indexingTasks.has(siteId);
+      const status = stillIndexing ? "indexing" : task.error ? "failed" : "idle";
+
+      const summary = stillIndexing
+        ? `Site #${siteId} (${existing ? existing.name : name}) — crawl running in background (${pagesIndexed} pages so far).`
+        : task.error
+          ? `Site #${siteId} (${existing ? existing.name : name}) — crawl failed: ${task.error}`
+          : `Site #${siteId} (${existing ? existing.name : name}) — ${pagesIndexed} pages, ${chunksIndexed} chunks indexed.`;
+
       return {
-        content: [
-          {
-            type: "text",
-            text: `Indexed ${pagesIndexed} pages (${chunksIndexed} chunks) under site #${siteId} (${name}).`,
-          },
-        ],
+        content: [{ type: "text", text: summary }],
         structuredContent: {
           siteId,
-          name,
+          name: existing ? existing.name : name,
           baseUrl,
+          status,
           pagesIndexed,
           chunksIndexed,
-          ...result,
+          error: task.error ?? null,
+          startedAt: task.startedAt,
+          alreadyExisted: !!existing,
         },
       };
     },

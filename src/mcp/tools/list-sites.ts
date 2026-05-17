@@ -20,6 +20,7 @@ export function registerListSites(server: McpServer, ctx: ServerContext): void {
         pageCount: countPages(ctx.db, s.id),
         createdAt: s.created_at,
         lastCrawledAt: s.last_crawled_at,
+        indexing: ctx.indexingTasks.has(s.id),
       }));
       const text =
         sites.length === 0
@@ -27,7 +28,7 @@ export function registerListSites(server: McpServer, ctx: ServerContext): void {
           : sites
               .map(
                 (s) =>
-                  `#${s.siteId} ${s.name} — ${s.baseUrl} (${s.pageCount} pages, last crawled ${s.lastCrawledAt ?? "never"})`,
+                  `#${s.siteId} ${s.name} — ${s.baseUrl} (${s.pageCount} pages, last crawled ${s.lastCrawledAt ?? "never"}${s.indexing ? ", INDEXING" : ""})`,
               )
               .join("\n");
       return {

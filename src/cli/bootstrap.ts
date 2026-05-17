@@ -83,6 +83,7 @@ export async function bootstrapContext(
     db: handle.db,
     queue,
     embeddingsAvailable,
+    indexingTasks: new Map(),
   };
   if (embedQuery) ctx.embedQuery = embedQuery;
   if (ctxEmbedClient) ctx.embedClient = ctxEmbedClient;

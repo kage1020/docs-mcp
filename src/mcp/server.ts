@@ -3,6 +3,7 @@ import packageJson from "../../package.json" with { type: "json" };
 import type { ServerContext } from "./context.ts";
 import { registerAddSite } from "./tools/add-site.ts";
 import { registerGetDoc } from "./tools/get-doc.ts";
+import { registerIndexStatus } from "./tools/index-status.ts";
 import { registerListSites } from "./tools/list-sites.ts";
 import { registerRefreshSite } from "./tools/refresh-site.ts";
 import { registerRemoveSite } from "./tools/remove-site.ts";
@@ -19,5 +20,6 @@ export function buildMcpServer(ctx: ServerContext): McpServer {
   registerRemoveSite(server, ctx);
   registerListSites(server, ctx);
   registerRefreshSite(server, ctx);
+  registerIndexStatus(server, ctx);
   return server;
 }

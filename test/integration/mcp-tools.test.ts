@@ -29,6 +29,7 @@ describe("integration/mcp-tools", () => {
       queue,
       embeddingsAvailable: false,
       fetcher: fetchUrl,
+      indexingTasks: new Map(),
     });
     const [clientT, serverT] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "test", version: "0" });
@@ -36,12 +37,20 @@ describe("integration/mcp-tools", () => {
     return { site, h, server, client };
   }
 
-  it("lists exactly the six tools", async () => {
+  it("lists the seven tools", async () => {
     const { client } = await setup();
     const tools = await client.listTools();
     const names = tools.tools.map((t) => t.name).sort();
     expect(names).toEqual(
-      ["add_site", "get_doc", "list_sites", "refresh_site", "remove_site", "search_docs"].sort(),
+      [
+        "add_site",
+        "get_doc",
+        "index_status",
+        "list_sites",
+        "refresh_site",
+        "remove_site",
+        "search_docs",
+      ].sort(),
     );
   });
 
