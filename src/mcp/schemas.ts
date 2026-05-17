@@ -25,6 +25,12 @@ export const GetDocShape = {
     .max(500_000)
     .default(60_000)
     .describe("Truncate output to at most this many characters"),
+  persist: z
+    .boolean()
+    .default(false)
+    .describe(
+      "Also index the fetched page so search_docs can find it. Requires a registered site whose base_url covers the URL.",
+    ),
 };
 
 export const AddSiteShape = {

@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { search } from "../../search/search.ts";
+import { getSite } from "../../storage/repositories/sites.ts";
 import type { ServerContext } from "../context.ts";
 import { SearchDocsShape } from "../schemas.ts";
 
@@ -13,6 +14,12 @@ export function registerSearchDocs(server: McpServer, ctx: ServerContext): void 
       inputSchema: SearchDocsShape,
     },
     async (input) => {
+      if (typeof input.site_id === "number" && !getSite(ctx.db, input.site_id)) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `No site with id ${input.site_id}` }],
+        };
+      }
       const opts: Parameters<typeof search>[0] = {
         db: ctx.db,
         query: input.query,

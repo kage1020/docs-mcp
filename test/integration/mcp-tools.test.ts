@@ -30,6 +30,7 @@ describe("integration/mcp-tools", () => {
       embeddingsAvailable: false,
       fetcher: fetchUrl,
       indexingTasks: new Map(),
+      robotsCache: new Map(),
     });
     const [clientT, serverT] = InMemoryTransport.createLinkedPair();
     const client = new Client({ name: "test", version: "0" });

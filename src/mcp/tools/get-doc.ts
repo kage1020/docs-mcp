@@ -1,8 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { fetchUrl } from "../../crawler/fetcher.ts";
-import { normalize } from "../../crawler/url.ts";
+import { type Fetcher, loadRobots } from "../../crawler/site-setup.ts";
+import { isUnderBase, normalize } from "../../crawler/url.ts";
 import { extract } from "../../extractor/extract.ts";
 import { htmlToMarkdown } from "../../extractor/markdown.ts";
+import { chunk } from "../../indexer/chunk.ts";
+import { embedAndStoreChunks } from "../../indexer/embed-chunks.ts";
+import { indexPage } from "../../indexer/index-page.ts";
+import { listSites } from "../../storage/repositories/sites.ts";
 import type { ServerContext } from "../context.ts";
 import { GetDocShape } from "../schemas.ts";
 
@@ -23,6 +28,16 @@ function cleanCache(): void {
   }
 }
 
+async function getOrLoadRobots(ctx: ServerContext, url: string, fetcher: Fetcher) {
+  const origin = new URL(url).origin;
+  let advisor = ctx.robotsCache.get(origin);
+  if (advisor) return advisor;
+  const { advisor: a } = await loadRobots(`${origin}/`, fetcher);
+  ctx.robotsCache.set(origin, a);
+  advisor = a;
+  return advisor;
+}
+
 export function registerGetDoc(server: McpServer, ctx: ServerContext): void {
   const fetcher = ctx.fetcher ?? fetchUrl;
   server.registerTool(
@@ -30,7 +45,7 @@ export function registerGetDoc(server: McpServer, ctx: ServerContext): void {
     {
       title: "Get a documentation page as Markdown",
       description:
-        "Returns the markdown body of a documentation page. Pulls from the local index when available, otherwise fetches and converts on the fly.",
+        "Returns the markdown body of a documentation page. Pulls from the local index when available, otherwise fetches and converts on the fly. Pass persist:true to index the fetched page into a registered site.",
       inputSchema: GetDocShape,
     },
     async (input) => {
@@ -54,12 +69,13 @@ export function registerGetDoc(server: McpServer, ctx: ServerContext): void {
             source: "cache",
             fetchedAt: cached.fetched_at,
             truncated: cached.markdown.length > maxChars,
+            persisted: false,
           },
         };
       }
 
       const mem = memoryCache.get(url);
-      if (mem) {
+      if (mem && !input.persist) {
         const md = mem.markdown.slice(0, maxChars);
         return {
           content: [{ type: "text", text: md }],
@@ -70,8 +86,39 @@ export function registerGetDoc(server: McpServer, ctx: ServerContext): void {
             source: "memory-cache",
             fetchedAt: mem.fetchedAt,
             truncated: mem.markdown.length > maxChars,
+            persisted: false,
           },
         };
+      }
+
+      // Cold path: robots check first, then fetch + extract.
+      const advisor = await getOrLoadRobots(ctx, url, fetcher);
+      const userAgent = ctx.userAgent ?? "docs-mcp";
+      if (!advisor.isAllowed(url, userAgent)) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `URL is disallowed by robots.txt: ${url}` }],
+        };
+      }
+
+      // If persist requested, also resolve which registered site this URL belongs to.
+      let persistSiteId: number | null = null;
+      const persistDepth = 0;
+      if (input.persist) {
+        const sites = listSites(ctx.db);
+        const matching = sites.find((s) => isUnderBase(url, s.base_url));
+        if (!matching) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: `Cannot persist ${url}: no registered site whose base_url covers it. Call add_site first.`,
+              },
+            ],
+          };
+        }
+        persistSiteId = matching.id;
       }
 
       const fetchOpts: Parameters<typeof fetcher>[1] = {};
@@ -92,8 +139,33 @@ export function registerGetDoc(server: McpServer, ctx: ServerContext): void {
       }
       const md = htmlToMarkdown(extracted.contentHtml);
       const fetchedAt = Date.now();
-      memoryCache.set(url, { markdown: md, title: extracted.title, fetchedAt });
-      cleanCache();
+
+      let persisted = false;
+      if (persistSiteId !== null) {
+        const chunks = chunk(md, { leafLabel: true });
+        const indexed = indexPage(
+          ctx.db,
+          {
+            siteId: persistSiteId,
+            url,
+            title: extracted.title,
+            etag: res.headers.get("etag"),
+            lastModified: res.headers.get("last-modified"),
+            markdown: md,
+            fetchedAt,
+            depth: persistDepth,
+          },
+          chunks,
+        );
+        if (ctx.embedClient && indexed.chunkCount > 0) {
+          await embedAndStoreChunks(ctx.db, indexed.pageId, ctx.embedClient);
+        }
+        persisted = true;
+      } else {
+        memoryCache.set(url, { markdown: md, title: extracted.title, fetchedAt });
+        cleanCache();
+      }
+
       const truncated = md.length > maxChars;
       const sliced = md.slice(0, maxChars);
       return {
@@ -105,6 +177,8 @@ export function registerGetDoc(server: McpServer, ctx: ServerContext): void {
           source: "fetched",
           fetchedAt,
           truncated,
+          persisted,
+          ...(persistSiteId !== null ? { siteId: persistSiteId } : {}),
         },
       };
     },
