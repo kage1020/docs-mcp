@@ -43,9 +43,13 @@ export function openDb(opts: OpenDbOptions): DbHandle {
       sqliteVec.load(db);
       // sqliteVec.load() returns silently on some hosts (notably macOS
       // CI runners with Bun's bundled sqlite) even when the extension
-      // didn't actually register. A canary query confirms vec0 is
-      // really usable before we promise the caller anything.
-      db.query<{ v: string }, []>("SELECT vec_version() AS v").get();
+      // didn't actually register. `vec_version()` may pass while the
+      // vec0 *virtual table* module is still missing. The only reliable
+      // canary is to actually create + drop a vec0 table.
+      db.run(
+        "CREATE VIRTUAL TABLE _vec_canary USING vec0(id INTEGER PRIMARY KEY, embedding FLOAT[4])",
+      );
+      db.run("DROP TABLE _vec_canary");
       vecAvailable = true;
     } catch {
       vecAvailable = false;
