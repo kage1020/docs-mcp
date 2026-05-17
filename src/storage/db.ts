@@ -41,6 +41,11 @@ export function openDb(opts: OpenDbOptions): DbHandle {
   if (opts.enableVec !== false) {
     try {
       sqliteVec.load(db);
+      // sqliteVec.load() returns silently on some hosts (notably macOS
+      // CI runners with Bun's bundled sqlite) even when the extension
+      // didn't actually register. A canary query confirms vec0 is
+      // really usable before we promise the caller anything.
+      db.query<{ v: string }, []>("SELECT vec_version() AS v").get();
       vecAvailable = true;
     } catch {
       vecAvailable = false;

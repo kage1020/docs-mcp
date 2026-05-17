@@ -5,6 +5,7 @@ import { search } from "../../../src/search/search.ts";
 import { searchVector } from "../../../src/search/vector.ts";
 import { type DbHandle, ensureVecTable, openDb } from "../../../src/storage/db.ts";
 import { migrate } from "../../../src/storage/migrate.ts";
+import { skipIfNoVec } from "../../helpers/vec-availability.ts";
 
 const handles: DbHandle[] = [];
 
@@ -70,6 +71,7 @@ describe("search/vector", () => {
   });
 
   it("returns nearest neighbors after seeding", () => {
+    if (skipIfNoVec()) return;
     const h = setup();
     ensureVecTable(h.db, 4);
     const ins = h.db.prepare("INSERT INTO chunks_vec(chunk_id, embedding) VALUES (?, ?)");
@@ -122,6 +124,7 @@ describe("search > dispatch", () => {
   });
 
   it("auto -> hybrid when embeddings available + embedQuery provided", async () => {
+    if (skipIfNoVec()) return;
     const h = setup();
     ensureVecTable(h.db, 4);
     h.db

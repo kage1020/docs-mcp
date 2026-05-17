@@ -7,6 +7,7 @@ import {
   type FakeEmbeddingServer,
   startFakeEmbeddingServer,
 } from "../../helpers/embedding-server.ts";
+import { skipIfNoVec } from "../../helpers/vec-availability.ts";
 
 describe("indexer/embed-chunks", () => {
   const handles: DbHandle[] = [];
@@ -42,6 +43,7 @@ describe("indexer/embed-chunks", () => {
   }
 
   it("embeds every chunk of the page and inserts into chunks_vec", async () => {
+    if (skipIfNoVec()) return;
     const server = startFakeEmbeddingServer({ dim: 8 });
     servers.push(server);
     const client = createEmbeddingClient({ baseUrl: `${server.origin}/v1`, model: "m" });
@@ -82,6 +84,7 @@ describe("indexer/embed-chunks", () => {
   });
 
   it("replaces existing vectors (re-index after content change)", async () => {
+    if (skipIfNoVec()) return;
     const server = startFakeEmbeddingServer({ dim: 8 });
     servers.push(server);
     const client = createEmbeddingClient({ baseUrl: `${server.origin}/v1`, model: "m" });
@@ -95,6 +98,7 @@ describe("indexer/embed-chunks", () => {
   });
 
   it("swallows endpoint errors and reports embedded=0", async () => {
+    if (skipIfNoVec()) return;
     const server = startFakeEmbeddingServer({ failEmbeddings: true });
     servers.push(server);
     const client = createEmbeddingClient({ baseUrl: `${server.origin}/v1`, model: "m" });
