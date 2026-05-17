@@ -7,6 +7,7 @@ export const EnvSchema = z.object({
   DOCS_MCP_EMBEDDING_MODEL: z.string().default("nomic-embed-text"),
   DOCS_MCP_EMBEDDING_API_KEY: z.string().optional(),
   DOCS_MCP_USER_AGENT: z.string().optional(),
+  DOCS_MCP_RENDER: z.enum(["fetch", "playwright"]).default("fetch"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 

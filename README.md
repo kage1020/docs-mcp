@@ -76,7 +76,29 @@ docs-mcp remove --id <site_id>
 | `DOCS_MCP_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model name |
 | `DOCS_MCP_EMBEDDING_API_KEY` | _(unset)_ | Bearer token if required |
 | `DOCS_MCP_USER_AGENT` | `docs-mcp/<ver>` | Override the crawl User-Agent |
+| `DOCS_MCP_RENDER` | `fetch` | `fetch` (native, default) or `playwright` (JS-rendered SPA support) |
 | `LOG_LEVEL` | `info` | pino log level (`fatal/error/warn/info/debug/trace/silent`) |
+
+### SPA rendering with playwright (optional)
+
+For sites whose pages render in the browser (e.g. parts of
+`developers.google.com`, many React/Next.js docs apps), set
+`DOCS_MCP_RENDER=playwright`. This swaps the native fetcher for a
+headless-chromium one (`page.goto` → `waitUntil: domcontentloaded` →
+short `networkidle` settle → `page.content()`).
+
+Setup (one-time):
+
+```bash
+bun add -d playwright
+bunx playwright install chromium
+```
+
+**Note**: at the time of writing, Bun + Windows have a stdio-pipe
+incompatibility with playwright's chromium launcher, so `DOCS_MCP_RENDER=playwright`
+should be run under **Node.js** on Windows. Linux and macOS Bun runs work.
+The interface, env wiring, and unit tests are all in place — only the
+runtime launch handshake is gated on Bun's Windows pipe support.
 
 When the embedding endpoint is unreachable, the server logs a warning and
 continues in BM25-only mode.

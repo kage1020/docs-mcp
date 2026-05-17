@@ -71,7 +71,7 @@ async function main(): Promise<void> {
   }
 
   await server.close();
-  boot.shutdown();
+  await boot.shutdown();
 }
 
 main().catch(console.error);

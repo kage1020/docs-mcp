@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   if (added.isError) {
     console.error("add_site failed — aborting search measurement");
     await server.close();
-    boot.shutdown();
+    await boot.shutdown();
     rmSync(dataDir, { recursive: true, force: true });
     process.exit(1);
   }
@@ -125,7 +125,7 @@ async function main(): Promise<void> {
   console.log(`  unique URLs by row: ${new Set(rows.map((r) => r.url)).size}`);
 
   await server.close();
-  boot.shutdown();
+  await boot.shutdown();
   cleanup();
 }
 

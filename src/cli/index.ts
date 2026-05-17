@@ -79,7 +79,7 @@ async function runList(): Promise<RunResult> {
       process.stdout.write(`#${r.id}\t${r.pages} pages\t${r.name}\t${r.base_url}\n`);
     }
   }
-  shutdown();
+  await shutdown();
   return { exitCode: 0 };
 }
 
@@ -93,7 +93,7 @@ async function runRemove(args: string[]): Promise<RunResult> {
   const id = Number(idStr);
   const r = ctx.db.prepare("DELETE FROM sites WHERE id = ?").run(id);
   process.stdout.write(`deleted ${Number(r.changes)} site(s)\n`);
-  shutdown();
+  await shutdown();
   return { exitCode: 0 };
 }
 
@@ -119,7 +119,7 @@ async function runAdd(args: string[]): Promise<RunResult> {
   });
   process.stdout.write(`${JSON.stringify(result.structuredContent ?? {}, null, 2)}\n`);
   await server.close();
-  shutdown();
+  await shutdown();
   return { exitCode: result.isError ? 1 : 0 };
 }
 
@@ -143,7 +143,7 @@ async function runRefresh(args: string[]): Promise<RunResult> {
   });
   process.stdout.write(`${JSON.stringify(result.structuredContent ?? {}, null, 2)}\n`);
   await server.close();
-  shutdown();
+  await shutdown();
   return { exitCode: result.isError ? 1 : 0 };
 }
 

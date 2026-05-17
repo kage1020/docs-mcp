@@ -9,7 +9,7 @@ export async function serveStdio(): Promise<void> {
   await server.connect(transport);
   process.on("SIGINT", async () => {
     await server.close();
-    shutdown();
+    await shutdown();
     process.exit(0);
   });
 }

@@ -14,7 +14,7 @@ export type Bootstrap = {
   ctx: ServerContext;
   handle: DbHandle;
   env: DocsMcpEnv;
-  shutdown: () => void;
+  shutdown: () => void | Promise<void>;
 };
 
 function isProcessEnv(value: NodeJS.ProcessEnv | DocsMcpEnv): value is NodeJS.ProcessEnv {
@@ -85,11 +85,23 @@ export async function bootstrapContext(
   if (embedQuery) ctx.embedQuery = embedQuery;
   if (env.DOCS_MCP_USER_AGENT) ctx.userAgent = env.DOCS_MCP_USER_AGENT;
 
+  let renderShutdown: (() => Promise<void>) | null = null;
+  if (env.DOCS_MCP_RENDER === "playwright") {
+    const { createPlaywrightFetcher } = await import("../crawler/playwright-fetcher.ts");
+    const pfOpts: Parameters<typeof createPlaywrightFetcher>[0] = {};
+    if (env.DOCS_MCP_USER_AGENT) pfOpts.userAgent = env.DOCS_MCP_USER_AGENT;
+    const handle = await createPlaywrightFetcher(pfOpts);
+    ctx.fetcher = handle.fetch;
+    renderShutdown = handle.close;
+    log.info({ render: "playwright" }, "playwright fetcher is active");
+  }
+
   return {
     ctx,
     handle,
     env,
-    shutdown: () => {
+    shutdown: async () => {
+      if (renderShutdown) await renderShutdown();
       handle.close();
     },
   };

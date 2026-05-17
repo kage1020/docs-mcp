@@ -55,7 +55,7 @@ export async function serveHttp(opts: { port?: number } = {}): Promise<HttpServe
       await new Promise<void>((resolve, reject) =>
         server.close((err) => (err ? reject(err) : resolve())),
       );
-      shutdown();
+      await shutdown();
     },
   };
 }
