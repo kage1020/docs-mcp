@@ -17,7 +17,6 @@ Thumbs.db
 .docs-mcp/
 .tmp-test-*/
 bench-result.json
-bench-baseline.json
 
 # tool-local state
 .claude/
