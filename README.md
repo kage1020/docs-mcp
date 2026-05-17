@@ -313,9 +313,13 @@ bun add -d playwright
 bunx playwright install chromium
 ```
 
-**Caveat**: Bun on Windows currently can't speak playwright's chromium
-stdio pipe, so the playwright path needs **Node** on Windows. Linux and
-macOS Bun runs work.
+Chromium is driven from a **node subprocess worker**
+(`src/crawler/playwright-worker.mjs`), so `node` must be on `$PATH`
+even when the main server runs under Bun. This is what makes the
+playwright path work on Bun-on-Windows, where in-process playwright
+can't speak chromium's pipe IPC. Override the worker's interpreter
+via `createPlaywrightFetcher({ nodePath })` if you need a non-default
+binary.
 
 ## Performance benchmarks
 
