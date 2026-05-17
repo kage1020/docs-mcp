@@ -17,16 +17,160 @@ tools — all from a single SQLite file.
 - **Async indexing**: kick off a crawl and have agents start
   `search_docs` immediately while the index fills in the background.
 
-## Install
+## Quick start
+
+### 1. Install
+
+```bash
+git clone https://github.com/kage1020/docs-mcp.git
+cd docs-mcp
+bun install
+```
+
+The entry point is `bin/docs-mcp`. Reference it by **absolute path** in
+your agent config below. (Optional: `bun build --compile bin/docs-mcp
+--outfile dist/docs-mcp` to produce a standalone binary.)
+
+### 2. (Optional) enable semantic search
+
+Any OpenAI-compatible embeddings endpoint works. The simplest is Ollama:
+
+```bash
+ollama pull nomic-embed-text
+# or any other embedding model — set DOCS_MCP_EMBEDDING_MODEL to match.
+```
+
+Then add the two env vars below to your agent config. Without these,
+docs-mcp runs in BM25-only mode (still very useful, just no semantic
+fallback).
+
+### 3. Wire into your agent
+
+All configs use the same `{ command, args, env }` shape. Replace
+`/ABSOLUTE/PATH/TO/docs-mcp` with where you cloned the repo.
+
+<details open>
+<summary><b>Claude Desktop</b></summary>
+
+Edit `claude_desktop_config.json`:
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- Linux: `~/.config/Claude/claude_desktop_config.json`
+
+```jsonc
+{
+  "mcpServers": {
+    "docs": {
+      "command": "bun",
+      "args": ["run", "/ABSOLUTE/PATH/TO/docs-mcp/bin/docs-mcp", "serve", "--stdio"],
+      "env": {
+        "DOCS_MCP_EMBEDDING_BASE_URL": "http://localhost:11434/v1",
+        "DOCS_MCP_EMBEDDING_MODEL": "nomic-embed-text"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop. The 7 tools appear under the hammer icon.
+</details>
+
+<details>
+<summary><b>Claude Code (project-scoped)</b></summary>
+
+Create `.mcp.json` at the project root:
+
+```jsonc
+{
+  "mcpServers": {
+    "docs": {
+      "command": "bun",
+      "args": ["run", "/ABSOLUTE/PATH/TO/docs-mcp/bin/docs-mcp", "serve", "--stdio"],
+      "env": {
+        "DOCS_MCP_EMBEDDING_BASE_URL": "http://localhost:11434/v1",
+        "DOCS_MCP_EMBEDDING_MODEL": "nomic-embed-text"
+      }
+    }
+  }
+}
+```
+
+Claude Code prompts to approve the server on next launch in that
+project. Or register globally:
+
+```bash
+claude mcp add docs -- bun run /ABSOLUTE/PATH/TO/docs-mcp/bin/docs-mcp serve --stdio
+```
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+Create `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
+
+```jsonc
+{
+  "mcpServers": {
+    "docs": {
+      "command": "bun",
+      "args": ["run", "/ABSOLUTE/PATH/TO/docs-mcp/bin/docs-mcp", "serve", "--stdio"],
+      "env": {
+        "DOCS_MCP_EMBEDDING_BASE_URL": "http://localhost:11434/v1",
+        "DOCS_MCP_EMBEDDING_MODEL": "nomic-embed-text"
+      }
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Windsurf / Cline / Roo Code / other MCP clients</b></summary>
+
+Most MCP-aware clients accept the same JSON shape; look for a "MCP
+servers" or "Model Context Protocol" section in settings. If your
+client only takes a command string, use:
+
+```bash
+bun run /ABSOLUTE/PATH/TO/docs-mcp/bin/docs-mcp serve --stdio
+```
+</details>
+
+<details>
+<summary><b>Remote / shared via Streamable HTTP</b></summary>
+
+Start the server once:
+
+```bash
+DOCS_MCP_EMBEDDING_BASE_URL=http://localhost:11434/v1 \
+DOCS_MCP_EMBEDDING_MODEL=nomic-embed-text \
+bun run /ABSOLUTE/PATH/TO/docs-mcp/bin/docs-mcp serve --http --port 7777
+```
+
+Then point any MCP client (Streamable HTTP transport) at
+`http://127.0.0.1:7777/mcp`.
+</details>
+
+### 4. First crawl
+
+From any of the agents above, ask it to:
+
+> Index https://nextjs.org/docs in the background, then search for "app router".
+
+Internally this calls `add_site` with `wait:false`, then `search_docs`.
+The agent can poll `index_status` to see progress.
+
+---
+
+## Develop / contribute
 
 ```bash
 bun install
-bun run typecheck
 bun run test
+bun run check
+bun run typecheck
+bun run bench
 ```
-
-The CLI lives at `bin/docs-mcp` (run with `bun run bin/docs-mcp …` during
-development, or build a standalone binary with `bun build --compile`).
 
 ## CLI
 
@@ -159,33 +303,6 @@ bunx playwright install chromium
 **Caveat**: Bun on Windows currently can't speak playwright's chromium
 stdio pipe, so the playwright path needs **Node** on Windows. Linux and
 macOS Bun runs work.
-
-## Claude Desktop / Claude Code config
-
-```jsonc
-{
-  "mcpServers": {
-    "docs": {
-      "command": "bun",
-      "args": ["run", "/abs/path/to/docs-mcp/bin/docs-mcp", "serve", "--stdio"],
-      "env": {
-        "DOCS_MCP_EMBEDDING_BASE_URL": "http://localhost:11434/v1",
-        "DOCS_MCP_EMBEDDING_MODEL": "nomic-embed-text"
-      }
-    }
-  }
-}
-```
-
-Copy at `examples/mcp.json`.
-
-## Streamable HTTP
-
-```bash
-docs-mcp serve --http --port 7777
-```
-
-Point any MCP client at `http://127.0.0.1:7777/mcp` (POST + DELETE).
 
 ## Performance benchmarks
 
