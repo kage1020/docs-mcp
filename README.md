@@ -233,10 +233,16 @@ Returns `structuredContent.hits` shaped like:
 The `content` text mirrors this as a context7-style render — each hit
 becomes a `### heading / Source: … / description / fenced code / table`
 block, so agents can answer the user without a separate `get_doc`
-round-trip when the answer fits in a chunk. Spec-table docs (Yahoo
-Ads, OpenAPI-style references) get the `tables` field populated with
-structured `{headers, rows}` so the answer is machine-readable, not
-just a markdown blob.
+round-trip when the answer fits in a chunk.
+
+**Spec-table docs** (Yahoo Ads, OpenAPI-style references) get a
+two-step boost: (1) the extractor detects field-definition `<table>`s
+and restructures each row into `<h4>fieldName</h4> + meta + description`
+HTML before turndown, and (2) the chunker splits on `h1`–`h4` so each
+field lands in its **own chunk** with `headingPath = "Service > Section
+> fieldName"`. BM25 then matches the field name directly, and the
+chunk's `description` carries the per-field doc — no `get_doc` needed
+to enumerate fields.
 
 Unknown `site_id` returns `isError: true` instead of silently empty hits.
 A *known but unindexed* `site_id` (e.g. crawl still running) returns
