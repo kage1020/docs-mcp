@@ -7,6 +7,13 @@ export const SearchDocsShape = {
   site_id: z.number().int().optional().describe("Restrict search to a single site"),
   top_k: z.number().int().min(1).max(50).default(10).describe("Number of hits to return"),
   mode: SearchModeEnum.default("auto").describe("Search mode"),
+  max_per_page: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .default(2)
+    .describe("Cap hits returned from any single page so results stay diverse"),
 };
 
 export const GetDocShape = {

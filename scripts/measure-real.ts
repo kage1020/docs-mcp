@@ -78,8 +78,11 @@ async function main(): Promise<void> {
     const took = ms(t0);
     const struct = res.structuredContent as { mode?: string; hits?: Hit[] } | undefined;
     const hits = struct?.hits ?? [];
-    console.log(`  "${q}" — ${took}ms — mode=${struct?.mode} — ${hits.length} hits`);
-    for (const h of hits.slice(0, 2)) {
+    const distinctPages = new Set(hits.map((h) => h.pageUrl)).size;
+    console.log(
+      `  "${q}" — ${took}ms — mode=${struct?.mode} — ${hits.length} hits / ${distinctPages} distinct pages`,
+    );
+    for (const h of hits) {
       console.log(`    [${h.score.toFixed(3)} ${h.source}] ${h.headingPath} — ${h.pageUrl}`);
     }
   }

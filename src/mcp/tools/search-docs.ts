@@ -18,6 +18,7 @@ export function registerSearchDocs(server: McpServer, ctx: ServerContext): void 
         query: input.query,
         topK: input.top_k,
         mode: input.mode,
+        maxPerPage: input.max_per_page,
         embeddingsAvailable: ctx.embeddingsAvailable,
       };
       if (typeof input.site_id === "number") opts.siteId = input.site_id;
