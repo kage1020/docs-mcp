@@ -330,13 +330,13 @@ bun add -d playwright
 bunx playwright install chromium
 ```
 
-Chromium is driven from a **node subprocess worker**
-(`src/crawler/playwright-worker.mjs`), so `node` must be on `$PATH`
-even when the main server runs under Bun. This is what makes the
-playwright path work on Bun-on-Windows, where in-process playwright
-can't speak chromium's pipe IPC. Override the worker's interpreter
-via `createPlaywrightFetcher({ nodePath })` if you need a non-default
-binary.
+Chromium is launched directly from Bun and driven over CDP via a raw
+WebSocket connection (`src/crawler/cdp-client.ts`). Playwright is used
+only to locate the chromium executable — its in-process launcher can't
+speak chromium's pipe IPC under Bun-on-Windows, and the `ws`-based
+`connectOverCDP` fallback hangs in the same environment. Pin the
+chromium binary via `createPlaywrightFetcher({ executablePath })` if you
+need a non-default install.
 
 ## Performance benchmarks
 

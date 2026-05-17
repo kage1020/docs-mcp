@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-// One-shot smoke test for the node-subprocess playwright fetcher.
-// Spins up a tiny Bun.serve fixture, launches the worker, fetches one
+// One-shot smoke test for the CDP-backed playwright fetcher.
+// Spins up a tiny Bun.serve fixture, launches chromium, fetches one
 // page, and prints whether the round-trip succeeded.
 //
-//   bun run scripts/smoke-playwright-worker.ts
+//   bun run scripts/smoke-playwright-fetcher.ts
 
 import { createPlaywrightFetcher } from "../src/crawler/playwright-fetcher.ts";
 
@@ -22,7 +22,7 @@ console.log(`[smoke] fixture at ${url}`);
 const t0 = performance.now();
 const handle = await createPlaywrightFetcher({ launchTimeoutMs: 90_000 });
 const launchMs = Math.round(performance.now() - t0);
-console.log(`[smoke] worker ready in ${launchMs}ms`);
+console.log(`[smoke] chromium ready in ${launchMs}ms`);
 
 const t1 = performance.now();
 const res = await handle.fetch(url, { timeoutMs: 30_000 });

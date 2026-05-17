@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
 // Reading the module is the contract: it should expose a factory function
-// that returns a Fetcher-compatible handle. Actually launching chromium
-// requires a Node runtime (Bun on Windows currently can't speak playwright's
-// stdio pipe — verified manually; tracked in README).
+// that returns a Fetcher-compatible handle. The factory launches chromium
+// directly and speaks CDP over WebSocket, so it works under both Bun and
+// Node on Windows (no node subprocess required).
 describe("crawler/playwright-fetcher", () => {
   it("exports createPlaywrightFetcher", async () => {
     const mod = await import("../../../src/crawler/playwright-fetcher.ts");

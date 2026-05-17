@@ -35,7 +35,7 @@ describe("integration/playwright-worker", () => {
     for (const s of servers.splice(0)) await s.stop();
   });
 
-  it("AC-29.1: spawns node-subprocess worker and fetches a fixture with JS executed", async () => {
+  it("AC-29.1: launches chromium via CDP and fetches a fixture with JS executed", async () => {
     if (!chromiumAvailable) return;
     const server = startServer(
       () => new Response(FIXTURE_HTML, { headers: { "content-type": "text/html" } }),
@@ -50,7 +50,7 @@ describe("integration/playwright-worker", () => {
     expect(res.body).toContain("Hello");
   }, 120_000);
 
-  it("AC-29.2: multiple sequential fetches reuse the same worker process", async () => {
+  it("AC-29.2: multiple sequential fetches reuse the same chromium process", async () => {
     if (!chromiumAvailable) return;
     const server = startServer(
       () => new Response(FIXTURE_HTML, { headers: { "content-type": "text/html" } }),
@@ -69,10 +69,10 @@ describe("integration/playwright-worker", () => {
     expect(server.hits()).toBeGreaterThanOrEqual(3);
   }, 120_000);
 
-  it("AC-29.3: close() shuts the worker down cleanly", async () => {
+  it("AC-29.3: close() shuts chromium down cleanly", async () => {
     if (!chromiumAvailable) return;
     const handle = await createPlaywrightFetcher({ launchTimeoutMs: 90_000 });
-    // First do a successful fetch to ensure the worker is healthy.
+    // First do a successful fetch to ensure chromium is healthy.
     const server = startServer(
       () => new Response(FIXTURE_HTML, { headers: { "content-type": "text/html" } }),
     );
