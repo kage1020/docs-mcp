@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { type DbHandle, ensureVecTable, openDb } from "../../../src/storage/db.ts";
 import { migrate } from "../../../src/storage/migrate.ts";
+import { skipIfNoVec } from "../../helpers/vec-availability.ts";
 
 describe("storage/db", () => {
   const handles: DbHandle[] = [];
@@ -16,6 +17,7 @@ describe("storage/db", () => {
   }
 
   it("opens an in-memory db and reports vecAvailable when sqlite-vec loads", () => {
+    if (skipIfNoVec()) return;
     const h = fresh();
     expect(h.db).toBeDefined();
     expect(h.vecAvailable).toBe(true);
@@ -34,6 +36,7 @@ describe("storage/db", () => {
   });
 
   it("ensureVecTable creates chunks_vec with the requested dimension", () => {
+    if (skipIfNoVec()) return;
     const h = fresh();
     migrate(h.db);
     expect(ensureVecTable(h.db, 8)).toBe(true);
@@ -50,6 +53,7 @@ describe("storage/db", () => {
   });
 
   it("ensureVecTable is a no-op when called twice with the same dim", () => {
+    if (skipIfNoVec()) return;
     const h = fresh();
     migrate(h.db);
     expect(ensureVecTable(h.db, 16)).toBe(true);
@@ -57,6 +61,7 @@ describe("storage/db", () => {
   });
 
   it("ensureVecTable rebuilds the table when dim changes", () => {
+    if (skipIfNoVec()) return;
     const h = fresh();
     migrate(h.db);
     ensureVecTable(h.db, 8);
