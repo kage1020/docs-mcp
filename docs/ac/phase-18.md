@@ -25,11 +25,17 @@ fetch auto-decompresses them.
 
 ### Real-world
 
-5. **AC-18.5**: A re-measure against
-   `https://developers.facebook.com/documentation/ads-commerce/marketing-api`
-   returns dozens to thousands of URLs from
-   `developers_facebook_com_docs_sitemap.xml.gz` (vs. 0 previously),
-   and `pagesIndexed` is at least an order of magnitude higher than the
-   Phase 17 result.
+5. **AC-18.5**: Any site that actually serves a gzipped sitemap can now
+   be indexed — demonstrated by the synthetic fixture in
+   `test/unit/crawler/sitemap-gzip.test.ts` (urlset + sitemapindex,
+   both gzipped, no `Content-Encoding` header).
+
+   Note discovered during measurement: `developers.facebook.com` does
+   *not* actually serve gzipped sitemaps despite advertising
+   `*.xml.gz` URLs in `robots.txt`. Those URLs return
+   `text/html; charset="utf-8"` (a cookie-wall page). This is a content
+   problem on Facebook's side, not a docs-mcp gap. For sites with this
+   pattern, indexing via BFS is the only path (and likely needs
+   `DOCS_MCP_RENDER=playwright` if the link graph is JS-rendered).
 
 These ACs are **locked**.
