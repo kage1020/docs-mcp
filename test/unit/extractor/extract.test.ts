@@ -60,4 +60,48 @@ describe("extractor/extract", () => {
     const r = extract({ url: "https://x.dev/", html });
     expect(r?.contentHtml).toContain("https://other.example/foo/bar");
   });
+
+  it("AC-34.1: spec-style HTML tables get restructured into per-field <h4> blocks", () => {
+    // Mimics Yahoo Ads / OpenAPI spec docs: dense field tables with
+    // multi-paragraph cells. Markdown tables can't represent these, so
+    // each row gets restructured into <h4>fieldName</h4> +
+    // <p>type · required · …</p> + <div>description</div>. The chunker
+    // then turns each field into its own searchable unit with the
+    // field name in the heading_path.
+    const row = (i: number) => `<tr>
+      <td class="paramName"><span class="indent"></span>field${i}</td>
+      <td></td>
+      <td>string</td>
+      <td>true</td>
+      <td>title: ServiceField${i}<br>
+        <div lang="ja">ServiceField${i}、ユーザー設定情報。ADD時、このフィールドは必須となります。</div>
+        <div lang="en">ServiceField${i} settings. This field is required on ADD.</div>
+      </td>
+    </tr>`;
+    const tableBlock = (n: number) =>
+      `<table><thead><tr><th>name</th><th></th><th>type</th><th>required</th><th>description</th></tr></thead>
+        <tbody>${Array.from({ length: n }, (_, i) => row(i)).join("")}</tbody></table>`;
+    const html = `<!DOCTYPE html><html><head><title>API Reference</title></head>
+      <body><main>
+        <h1>CampaignService.get</h1>
+        <p>Returns campaign objects.</p>
+        <h2>Request</h2>
+        ${tableBlock(15)}
+        <h2>Response</h2>
+        ${tableBlock(25)}
+      </main></body></html>`;
+    const r = extract({ url: "https://api.example.com/CampaignService/get/", html });
+    expect(r).not.toBeNull();
+    const out = r?.contentHtml ?? "";
+    // Spec-table marker is set so downstream tooling can identify the
+    // structure if needed.
+    expect(out).toContain('data-spec-table="true"');
+    // Every body row becomes its own <h4>fieldN</h4> heading.
+    const h4Matches = out.match(/<h4[^>]*>field\d+<\/h4>/g) ?? [];
+    expect(h4Matches.length).toBeGreaterThanOrEqual(40);
+    expect(out).toContain("<h4>field0</h4>");
+    expect(out).toContain("<h4>field24</h4>");
+    // The metadata cells (type, required) end up in a paragraph.
+    expect(out).toMatch(/<p>string · true<\/p>/);
+  });
 });
