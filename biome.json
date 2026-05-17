@@ -2,7 +2,16 @@
   "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["src/**/*", "test/**/*", "bin/**/*", "scripts/**/*", "*.json", "*.md"]
+    "includes": [
+      "src/**/*",
+      "test/**/*",
+      "bin/**/*",
+      "scripts/**/*",
+      "*.json",
+      "*.md",
+      "!bench-baseline.json",
+      "!bench-result.json"
+    ]
   },
   "formatter": {
     "enabled": true,
