@@ -86,4 +86,63 @@ print("hi")
     expect(out.description).toContain("Description text");
     expect(out.codeBlocks).toEqual([]);
   });
+
+  it("AC-33.1: extracts a simple markdown table into {headers, rows}", () => {
+    const md = `Intro.
+
+| name | type | required |
+|---|---|---|
+| accountId | integer | true |
+| appId | string | false |`;
+    const out = extractSnippetParts(md);
+    expect(out.tables).toHaveLength(1);
+    expect(out.tables[0]?.headers).toEqual(["name", "type", "required"]);
+    expect(out.tables[0]?.rows).toEqual([
+      ["accountId", "integer", "true"],
+      ["appId", "string", "false"],
+    ]);
+  });
+
+  it("AC-33.2: tables do not contaminate description", () => {
+    const md = `| name | type |
+|---|---|
+| a | b |
+
+A clear paragraph.`;
+    const out = extractSnippetParts(md);
+    expect(out.description).toContain("A clear paragraph");
+    expect(out.description).not.toContain("---");
+    expect(out.description).not.toContain("| name |");
+    expect(out.tables).toHaveLength(1);
+  });
+
+  it("AC-33.3: multiple tables in one chunk", () => {
+    const md = `| a | b |
+|---|---|
+| 1 | 2 |
+
+text between
+
+| c | d |
+|---|---|
+| 3 | 4 |`;
+    const out = extractSnippetParts(md);
+    expect(out.tables).toHaveLength(2);
+    expect(out.tables[0]?.headers).toEqual(["a", "b"]);
+    expect(out.tables[1]?.headers).toEqual(["c", "d"]);
+  });
+
+  it("AC-33.4: empty tables list when no table present", () => {
+    const md = `Just prose.\n\n\`\`\`ts\nconst x = 1;\n\`\`\``;
+    const out = extractSnippetParts(md);
+    expect(out.tables).toEqual([]);
+  });
+
+  it("AC-33.5: ignores malformed tables (missing separator row)", () => {
+    const md = `| name | type |
+| accountId | int |
+| appId | string |`;
+    const out = extractSnippetParts(md);
+    expect(out.tables).toEqual([]);
+  });
 });

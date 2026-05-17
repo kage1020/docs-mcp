@@ -1,5 +1,5 @@
 import type { Bm25Hit } from "./bm25.ts";
-import { type CodeBlock, extractSnippetParts } from "./snippet.ts";
+import { type CodeBlock, extractSnippetParts, type Table } from "./snippet.ts";
 import type { VectorHit } from "./vector.ts";
 
 export type FusedHit = {
@@ -10,6 +10,7 @@ export type FusedHit = {
   snippet: string;
   description: string;
   codeBlocks: CodeBlock[];
+  tables: Table[];
   score: number;
   source: "bm25" | "vector" | "both";
 };
@@ -29,7 +30,7 @@ export function rrf(
   const k = opts.k ?? 60;
   const topK = opts.topK ?? 10;
 
-  type Acc = Omit<FusedHit, "score" | "source" | "description" | "codeBlocks"> & {
+  type Acc = Omit<FusedHit, "score" | "source" | "description" | "codeBlocks" | "tables"> & {
     score: number;
     text: string;
     bm25Hit: boolean;
@@ -98,6 +99,7 @@ export function rrf(
       snippet: e.snippet,
       description: parts.description,
       codeBlocks: parts.codeBlocks,
+      tables: parts.tables,
       score: max > 0 ? e.score / max : 0,
       source: e.bm25Hit && e.vecHit ? "both" : e.bm25Hit ? "bm25" : "vector",
     };

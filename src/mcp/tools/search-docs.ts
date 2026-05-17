@@ -62,6 +62,14 @@ export function registerSearchDocs(server: McpServer, ctx: ServerContext): void 
           for (const cb of h.codeBlocks.slice(0, 2)) {
             lines.push("", `\`\`\`${cb.language ?? ""}`, cb.code, "```");
           }
+          for (const t of h.tables.slice(0, 1)) {
+            lines.push("", `| ${t.headers.join(" | ")} |`);
+            lines.push(`| ${t.headers.map(() => "---").join(" | ")} |`);
+            for (const row of t.rows.slice(0, 20)) {
+              lines.push(`| ${row.join(" | ")} |`);
+            }
+            if (t.rows.length > 20) lines.push(`| _… ${t.rows.length - 20} more rows_ |`);
+          }
           return lines.join("\n");
         })
         .join("\n\n---\n\n");

@@ -17,6 +17,7 @@ type Hit = {
   snippet: string;
   description: string;
   codeBlocks: Array<{ language: string | null; code: string }>;
+  tables: Array<{ headers: string[]; rows: string[][] }>;
   score: number;
   source: string;
 };
@@ -81,6 +82,50 @@ describe("integration/curated-snippets", () => {
     expect(hit?.codeBlocks).toHaveLength(1);
     expect(hit?.codeBlocks[0]?.language).toBe("ts");
     expect(hit?.codeBlocks[0]?.code).toContain("/campaigns");
+    await mcp.close();
+  });
+
+  it("AC-33.6: spec-table chunk surfaces structured rows in hit.tables", async () => {
+    const { ctx, client, mcp } = await setup();
+    const siteId = createSite(ctx.db, {
+      baseUrl: "https://example.com/",
+      name: "spec",
+      crawlOptionsJson: "{}",
+    });
+    ctx.db
+      .prepare(
+        "INSERT INTO pages(site_id, url, title, content_hash, markdown, markdown_size, fetched_at, depth) VALUES (?, ?, ?, 'h', '', 0, 0, 0)",
+      )
+      .run(siteId, "https://example.com/spec", "Campaign spec");
+    const pageId = ctx.db.query<{ id: number }, []>("SELECT id FROM pages").get()?.id ?? 0;
+    const chunkText = `Campaign object schema.
+
+| name | type | required |
+|---|---|---|
+| accountId | integer | true |
+| campaignName | string | true |
+| budget | object | false |`;
+    ctx.db
+      .prepare(
+        "INSERT INTO chunks(page_id, ord, heading_path, text, token_count) VALUES (?, 0, 'API > Campaign', ?, 12)",
+      )
+      .run(pageId, chunkText);
+
+    const r = await client.callTool({
+      name: "search_docs",
+      arguments: { query: "campaign", top_k: 5 },
+    });
+    const struct = r.structuredContent as { hits: Hit[] };
+    const hit = struct.hits[0];
+    expect(hit?.tables).toHaveLength(1);
+    expect(hit?.tables[0]?.headers).toEqual(["name", "type", "required"]);
+    expect(hit?.tables[0]?.rows).toHaveLength(3);
+    expect(hit?.tables[0]?.rows[0]).toEqual(["accountId", "integer", "true"]);
+
+    // text content also includes a table render
+    const text = (r.content as Array<{ text?: string }>)[0]?.text ?? "";
+    expect(text).toContain("| name | type | required |");
+    expect(text).toContain("| accountId | integer | true |");
     await mcp.close();
   });
 

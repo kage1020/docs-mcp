@@ -224,15 +224,19 @@ Returns `structuredContent.hits` shaped like:
   snippet: string;         // BM25 highlight (`<<…>>`) or first 200 chars
   description: string;     // First non-code paragraph of the chunk
   codeBlocks: Array<{ language: string | null; code: string }>;
+  tables: Array<{ headers: string[]; rows: string[][] }>;
   score: number;           // normalized 0..1
   source: "bm25" | "vector" | "both";
 }
 ```
 
 The `content` text mirrors this as a context7-style render — each hit
-becomes a `### heading / Source: … / description / fenced code` block,
-so agents can answer the user without a separate `get_doc` round-trip
-when the answer fits in a chunk.
+becomes a `### heading / Source: … / description / fenced code / table`
+block, so agents can answer the user without a separate `get_doc`
+round-trip when the answer fits in a chunk. Spec-table docs (Yahoo
+Ads, OpenAPI-style references) get the `tables` field populated with
+structured `{headers, rows}` so the answer is machine-readable, not
+just a markdown blob.
 
 Unknown `site_id` returns `isError: true` instead of silently empty hits.
 A *known but unindexed* `site_id` (e.g. crawl still running) returns

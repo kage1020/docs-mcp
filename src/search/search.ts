@@ -37,6 +37,7 @@ function bm25ToFused(hits: ReturnType<typeof searchBm25>): FusedHit[] {
       snippet: h.snippet,
       description: parts.description,
       codeBlocks: parts.codeBlocks,
+      tables: parts.tables,
       score: max > 0 ? Math.abs(h.bm25Score) / max : 0,
       source: "bm25",
     };
@@ -54,6 +55,7 @@ function vecToFused(hits: ReturnType<typeof searchVector>): FusedHit[] {
       snippet: h.text.slice(0, 200),
       description: parts.description,
       codeBlocks: parts.codeBlocks,
+      tables: parts.tables,
       score: 1 - Math.min(1, h.distance),
       source: "vector",
     };
