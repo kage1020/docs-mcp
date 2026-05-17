@@ -16,7 +16,10 @@ Thumbs.db
 # local data (cache / sqlite)
 .docs-mcp/
 .tmp-test-*/
+.tmp-eval-*/
 bench-result.json
 
 # tool-local state
 .claude/
+.mcp.json
+.playwright-mcp/
