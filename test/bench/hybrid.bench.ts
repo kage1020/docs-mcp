@@ -10,6 +10,7 @@ function bm25Hits(n: number): Bm25Hit[] {
     pageTitle: `T${i}`,
     headingPath: "H",
     snippet: "s",
+    text: "t",
     bm25Score: -(n - i),
   }));
 }

@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { searchBm25 } from "./bm25.ts";
 import { type FusedHit, rrf } from "./hybrid.ts";
+import { extractSnippetParts } from "./snippet.ts";
 import { searchVector } from "./vector.ts";
 
 export type SearchMode = "bm25" | "vector" | "hybrid" | "auto";
@@ -26,27 +27,37 @@ const DEFAULT_MAX_PER_PAGE = 2;
 
 function bm25ToFused(hits: ReturnType<typeof searchBm25>): FusedHit[] {
   const max = hits.length === 0 ? 1 : Math.abs(hits[0]?.bm25Score ?? 1);
-  return hits.map((h) => ({
-    chunkId: h.chunkId,
-    pageUrl: h.pageUrl,
-    pageTitle: h.pageTitle,
-    headingPath: h.headingPath,
-    snippet: h.snippet,
-    score: max > 0 ? Math.abs(h.bm25Score) / max : 0,
-    source: "bm25",
-  }));
+  return hits.map((h) => {
+    const parts = extractSnippetParts(h.text);
+    return {
+      chunkId: h.chunkId,
+      pageUrl: h.pageUrl,
+      pageTitle: h.pageTitle,
+      headingPath: h.headingPath,
+      snippet: h.snippet,
+      description: parts.description,
+      codeBlocks: parts.codeBlocks,
+      score: max > 0 ? Math.abs(h.bm25Score) / max : 0,
+      source: "bm25",
+    };
+  });
 }
 
 function vecToFused(hits: ReturnType<typeof searchVector>): FusedHit[] {
-  return hits.map((h) => ({
-    chunkId: h.chunkId,
-    pageUrl: h.pageUrl,
-    pageTitle: h.pageTitle,
-    headingPath: h.headingPath,
-    snippet: h.text.slice(0, 200),
-    score: 1 - Math.min(1, h.distance),
-    source: "vector",
-  }));
+  return hits.map((h) => {
+    const parts = extractSnippetParts(h.text);
+    return {
+      chunkId: h.chunkId,
+      pageUrl: h.pageUrl,
+      pageTitle: h.pageTitle,
+      headingPath: h.headingPath,
+      snippet: h.text.slice(0, 200),
+      description: parts.description,
+      codeBlocks: parts.codeBlocks,
+      score: 1 - Math.min(1, h.distance),
+      source: "vector",
+    };
+  });
 }
 
 /**

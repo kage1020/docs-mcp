@@ -6,6 +6,7 @@ export type Bm25Hit = {
   pageTitle: string | null;
   headingPath: string;
   snippet: string;
+  text: string;
   bm25Score: number;
 };
 
@@ -20,6 +21,7 @@ type Row = {
   title: string | null;
   heading_path: string;
   snippet: string;
+  text: string;
   bm25_score: number;
 };
 
@@ -46,6 +48,7 @@ export function searchBm25(db: Database, query: string, opts: Bm25Options = {}):
       p.title AS title,
       c.heading_path AS heading_path,
       snippet(chunks_fts, 0, '<<', '>>', '...', 32) AS snippet,
+      c.text AS text,
       bm25(chunks_fts) AS bm25_score
     FROM chunks_fts
     JOIN chunks c ON c.id = chunks_fts.rowid
@@ -63,6 +66,7 @@ export function searchBm25(db: Database, query: string, opts: Bm25Options = {}):
       pageTitle: r.title,
       headingPath: r.heading_path,
       snippet: r.snippet,
+      text: r.text,
       bm25Score: r.bm25_score,
     }));
   } catch {

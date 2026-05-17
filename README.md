@@ -220,12 +220,19 @@ Returns `structuredContent.hits` shaped like:
   chunkId: number;
   pageUrl: string;
   pageTitle: string | null;
-  headingPath: string;   // "Guide > Routing > CampaignService"
-  snippet: string;
-  score: number;         // normalized 0..1
+  headingPath: string;     // "Guide > Routing > CampaignService"
+  snippet: string;         // BM25 highlight (`<<…>>`) or first 200 chars
+  description: string;     // First non-code paragraph of the chunk
+  codeBlocks: Array<{ language: string | null; code: string }>;
+  score: number;           // normalized 0..1
   source: "bm25" | "vector" | "both";
 }
 ```
+
+The `content` text mirrors this as a context7-style render — each hit
+becomes a `### heading / Source: … / description / fenced code` block,
+so agents can answer the user without a separate `get_doc` round-trip
+when the answer fits in a chunk.
 
 Unknown `site_id` returns `isError: true` instead of silently empty hits.
 A *known but unindexed* `site_id` (e.g. crawl still running) returns

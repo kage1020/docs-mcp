@@ -53,16 +53,23 @@ export function registerSearchDocs(server: McpServer, ctx: ServerContext): void 
       const result = await search(opts);
       const summary = result.hits
         .map((h, i) => {
-          const snippet = h.snippet.replace(/\s+/g, " ").trim().slice(0, 160);
-          const tail = snippet ? `\n   "${snippet}"` : "";
-          return `${i + 1}. [${h.score.toFixed(3)} ${h.source}] ${h.pageTitle ?? "(untitled)"} — ${h.pageUrl}\n   ${h.headingPath}${tail}`;
+          const lines: string[] = [
+            `### ${i + 1}. ${h.headingPath || h.pageTitle || "(untitled)"}`,
+            `Source: ${h.pageUrl}`,
+            `Score: ${h.score.toFixed(3)} (${h.source})`,
+          ];
+          if (h.description) lines.push("", h.description);
+          for (const cb of h.codeBlocks.slice(0, 2)) {
+            lines.push("", `\`\`\`${cb.language ?? ""}`, cb.code, "```");
+          }
+          return lines.join("\n");
         })
-        .join("\n");
+        .join("\n\n---\n\n");
       return {
         content: [
           {
             type: "text",
-            text: result.hits.length === 0 ? "No results." : `mode=${result.mode}\n${summary}`,
+            text: result.hits.length === 0 ? "No results." : `mode=${result.mode}\n\n${summary}`,
           },
         ],
         structuredContent: {

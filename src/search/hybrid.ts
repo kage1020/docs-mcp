@@ -1,4 +1,5 @@
 import type { Bm25Hit } from "./bm25.ts";
+import { type CodeBlock, extractSnippetParts } from "./snippet.ts";
 import type { VectorHit } from "./vector.ts";
 
 export type FusedHit = {
@@ -7,6 +8,8 @@ export type FusedHit = {
   pageTitle: string | null;
   headingPath: string;
   snippet: string;
+  description: string;
+  codeBlocks: CodeBlock[];
   score: number;
   source: "bm25" | "vector" | "both";
 };
@@ -26,8 +29,9 @@ export function rrf(
   const k = opts.k ?? 60;
   const topK = opts.topK ?? 10;
 
-  type Acc = Omit<FusedHit, "score" | "source"> & {
+  type Acc = Omit<FusedHit, "score" | "source" | "description" | "codeBlocks"> & {
     score: number;
+    text: string;
     bm25Hit: boolean;
     vecHit: boolean;
   };
@@ -41,6 +45,7 @@ export function rrf(
     if (existing) {
       existing.score += 1 / (k + rank);
       existing.bm25Hit = true;
+      if (!existing.text && h.text) existing.text = h.text;
     } else {
       map.set(h.chunkId, {
         chunkId: h.chunkId,
@@ -48,6 +53,7 @@ export function rrf(
         pageTitle: h.pageTitle,
         headingPath: h.headingPath,
         snippet: h.snippet,
+        text: h.text,
         score: 1 / (k + rank),
         bm25Hit: true,
         vecHit: false,
@@ -64,6 +70,7 @@ export function rrf(
       existing.score += 1 / (k + rank);
       existing.vecHit = true;
       if (!existing.snippet) existing.snippet = h.text.slice(0, SNIPPET_FALLBACK_LEN);
+      if (!existing.text) existing.text = h.text;
     } else {
       map.set(h.chunkId, {
         chunkId: h.chunkId,
@@ -71,6 +78,7 @@ export function rrf(
         pageTitle: h.pageTitle,
         headingPath: h.headingPath,
         snippet: h.text.slice(0, SNIPPET_FALLBACK_LEN),
+        text: h.text,
         score: 1 / (k + rank),
         bm25Hit: false,
         vecHit: true,
@@ -80,13 +88,18 @@ export function rrf(
 
   const entries = Array.from(map.values()).sort((a, b) => b.score - a.score);
   const max = entries[0]?.score ?? 1;
-  return entries.slice(0, topK).map((e) => ({
-    chunkId: e.chunkId,
-    pageUrl: e.pageUrl,
-    pageTitle: e.pageTitle,
-    headingPath: e.headingPath,
-    snippet: e.snippet,
-    score: max > 0 ? e.score / max : 0,
-    source: e.bm25Hit && e.vecHit ? "both" : e.bm25Hit ? "bm25" : "vector",
-  }));
+  return entries.slice(0, topK).map((e) => {
+    const parts = extractSnippetParts(e.text);
+    return {
+      chunkId: e.chunkId,
+      pageUrl: e.pageUrl,
+      pageTitle: e.pageTitle,
+      headingPath: e.headingPath,
+      snippet: e.snippet,
+      description: parts.description,
+      codeBlocks: parts.codeBlocks,
+      score: max > 0 ? e.score / max : 0,
+      source: e.bm25Hit && e.vecHit ? "both" : e.bm25Hit ? "bm25" : "vector",
+    };
+  });
 }
