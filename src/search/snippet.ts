@@ -43,9 +43,27 @@ function extractTableFromBlock(block: string): Table | null {
   return { headers, rows };
 }
 
+function clipDescription(s: string): string {
+  const trimmed = s.replace(/\s+/g, " ").trim();
+  return trimmed.length > DESCRIPTION_MAX ? `${trimmed.slice(0, DESCRIPTION_MAX)}...` : trimmed;
+}
+
 export function extractSnippetParts(markdown: string): SnippetParts {
   if (typeof markdown !== "string" || markdown.trim() === "") {
     return { description: "", codeBlocks: [], tables: [] };
+  }
+
+  // Fast path: plain prose with no code fences, no table pipes, and no
+  // leading-line heading markers. Covers the vast majority of chunks
+  // including the synthetic placeholders used in benches. Saves the
+  // regex+split work in the full extraction path.
+  if (
+    !markdown.includes("```") &&
+    !markdown.includes("|") &&
+    markdown[0] !== "#" &&
+    !markdown.includes("\n#")
+  ) {
+    return { description: clipDescription(markdown), codeBlocks: [], tables: [] };
   }
 
   const codeBlocks: CodeBlock[] = [];
@@ -80,9 +98,7 @@ export function extractSnippetParts(markdown: string): SnippetParts {
     if (description) break;
   }
 
-  if (description.length > DESCRIPTION_MAX) {
-    description = `${description.slice(0, DESCRIPTION_MAX)}...`;
-  }
+  description = clipDescription(description);
 
   return { description, codeBlocks, tables };
 }
